@@ -1,0 +1,14 @@
+[Unit]
+Description=Hearth voice stack: prewarm speaches every few minutes during waking hours
+
+[Timer]
+# Every 5 min from 06:00–23:59. Tight enough to beat speaches' idle-eviction
+# TTL; skips the small hours when no one's on the voice line. Adjust the window to the
+# household's habits. OnBootSec primes the stack right after a host reboot.
+OnBootSec=2min
+OnCalendar=*-*-* 06..23:00/5
+Persistent=false
+Unit=hearth-voice-prewarm.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,51 @@
+# NSFW classifier sidecar — SFW/NSFW grading for the media-archival cordon.
+#
+# Endpoint contract (see ops/nsfw/README.md):
+#   POST /classify  multipart {image: bytes}
+#   → { drawings, hentai, neutral, porn, sexy }  (5 floats, ~sum 1)
+#
+# CPU-only; ~tens of ms per image (MobileNetV2). Single uvicorn worker on 8094.
+
+services:
+  hearth-nsfw:
+    build: ./nsfw
+    container_name: hearth-nsfw
+    restart: unless-stopped
+    # EGRESS-BLOCKED BY DESIGN. This classifier NEVER needs the internet — it
+    # loads a LOCAL SavedModel and serves HTTP — so it lives on an INTERNAL-only
+    # network (no gateway → zero outbound). TensorFlow's transitive deps
+    # (tensorflow-io-gcs-filesystem / requests / grpcio) are present but never
+    # invoked, and now they CANNOT phone home even if a future code path tried.
+    # The orchestrator reaches it by name because it ALSO joins hearth-nsfw-net:
+    #   HEARTH_NSFW_URL=http://hearth-nsfw:8094
+    # ONE-TIME box setup (the net is external so both compose projects share it):
+    #   docker network create --internal hearth-nsfw-net
+    #   # then add `hearth-nsfw-net` to hearth-orchestrator's `networks:` in the
+    #   # main /docker/docker-compose.yml and recreate it.
+    # Verify isolation: `docker exec hearth-nsfw curl -m5 https://example.com`
+    # must FAIL, while `docker exec hearth-orchestrator curl hearth-nsfw:8094/health`
+    # succeeds.
+    networks:
+      - nsfw-internal
+    # The MobileNetV2 SavedModel dir is bind-mounted so a re-create doesn't
+    # re-fetch it. Populate ./model/ once with `./fetch-model.sh`.
+    volumes:
+      - ./model:/model:ro
+    environment:
+      - NSFW_MODEL_PATH=/model/mobilenet_v2_140_224
+      # Defense-in-depth telemetry opt-outs (egress is already blocked above).
+      - DO_NOT_TRACK=1
+      - HF_HUB_OFFLINE=1
+      - TRANSFORMERS_OFFLINE=1
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8094/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  # Created once on the box: `docker network create --internal hearth-nsfw-net`.
+  # `internal: true` removes the gateway → the classifier has no route off-box.
+  nsfw-internal:
+    external: true
+    name: hearth-nsfw-net

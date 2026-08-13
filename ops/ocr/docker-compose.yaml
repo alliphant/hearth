@@ -1,0 +1,35 @@
+# PaddleOCR sidecar — CPU fallback for the Cordelia visual pipeline.
+#
+# Only invoked when the iOS-side Vision OCR result is empty (non-
+# English doc, the device failed, or non-iOS upload source). Most
+# captures skip it entirely because iOS already does the OCR work
+# before posting.
+#
+# Endpoint contract (see ops/ocr/README.md):
+#   POST /ocr   multipart {image: bytes, language?: string}
+#   → { text: string, mean_confidence: number, blocks: [...] }
+#
+# CPU-only; ~1-2s per page on commodity hardware. Container exposes
+# a single uvicorn worker on 8090.
+
+services:
+  hearth-ocr:
+    build: ./paddleocr
+    container_name: hearth-ocr
+    restart: unless-stopped
+    # Join the shared docknet so the orchestrator container reaches this
+    # by name: HEARTH_OCR_BASE_URL=http://hearth-ocr:8090. No host port
+    # mapping — it's only consumed container-to-container over docknet
+    # (and host 8090 is already in use). Test via:
+    #   docker exec hearth-orchestrator curl http://hearth-ocr:8090/health
+    networks:
+      - docknet
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8090/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  docknet:
+    external: true

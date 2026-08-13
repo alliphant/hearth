@@ -1,0 +1,65 @@
+# Local maps stack for Hearth's spatial awareness.
+#
+# Three OSRM engines (one per mode — you can't use a single graph for
+# all three because each mode needs a profile-specific weight model),
+# plus Nominatim for forward + reverse geocoding.
+#
+# Run `./setup.sh` once before bringing the stack up — it downloads the
+# Colorado OSM extract and builds the OSRM graphs (10-20 min per mode
+# on the the integrated AI accelerator small-form-factor box).
+#
+# ⚠ PINNED image, never :latest — OSRM graph files are only readable by
+# the SAME osrm-backend version that prepped them, so a floating tag that
+# moves between prep and a container recreate crash-loops all three
+# engines (the 2026-06-09 outage). refresh.sh preps with the RUNNING
+# engine's exact image; keep this pin in lockstep with the live
+# /docker/docker-compose.yml when upgrading (runbook in refresh.sh).
+
+services:
+  osrm-drive:
+    image: ghcr.io/project-osrm/osrm-backend:v26.6.5-amd64-debian
+    container_name: hearth-osrm-drive
+    restart: unless-stopped
+    command: osrm-routed --algorithm mld /data/colorado-drive.osrm
+    volumes:
+      - ./osrm-data:/data:ro
+    ports:
+      - "127.0.0.1:5001:5000"
+
+  osrm-bike:
+    image: ghcr.io/project-osrm/osrm-backend:v26.6.5-amd64-debian
+    container_name: hearth-osrm-bike
+    restart: unless-stopped
+    command: osrm-routed --algorithm mld /data/colorado-bike.osrm
+    volumes:
+      - ./osrm-data:/data:ro
+    ports:
+      - "127.0.0.1:5002:5000"
+
+  osrm-walk:
+    image: ghcr.io/project-osrm/osrm-backend:v26.6.5-amd64-debian
+    container_name: hearth-osrm-walk
+    restart: unless-stopped
+    command: osrm-routed --algorithm mld /data/colorado-walk.osrm
+    volumes:
+      - ./osrm-data:/data:ro
+    ports:
+      - "127.0.0.1:5003:5000"
+
+  nominatim:
+    image: mediagis/nominatim:4.4
+    container_name: hearth-nominatim
+    restart: unless-stopped
+    environment:
+      PBF_PATH: /nominatim/data/colorado-latest.osm.pbf
+      REPLICATION_URL: https://download.geofabrik.de/north-america/us/colorado-updates/
+      NOMINATIM_PASSWORD: hearth_local_only
+    volumes:
+      - nominatim-data:/var/lib/postgresql/14/main
+      - ./osm-data:/nominatim/data
+    ports:
+      - "127.0.0.1:8989:8080"
+    shm_size: 1gb
+
+volumes:
+  nominatim-data:

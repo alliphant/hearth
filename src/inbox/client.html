@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Hearth Inbox</title>
+<style>
+:root {
+  --bg: #fbfaf6;
+  --surface: #ffffff;
+  --surface-2: #f3f1ea;
+  --border: rgba(0,0,0,0.12);
+  --border-strong: rgba(0,0,0,0.22);
+  --text: #1d1d1b;
+  --text-muted: #5b5a55;
+  --accent: #7f5af0;
+  --accent-soft: rgba(127,90,240,0.12);
+  --danger: #c43838;
+  --success: #2d8f5c;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #18181a;
+    --surface: #232326;
+    --surface-2: #2c2c30;
+    --border: rgba(255,255,255,0.10);
+    --border-strong: rgba(255,255,255,0.22);
+    --text: #ecebe6;
+    --text-muted: #9a9994;
+    --accent: #a594ff;
+    --accent-soft: rgba(165,148,255,0.16);
+    --danger: #e26666;
+    --success: #6dc795;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.4);
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+main {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 48px 24px 96px;
+}
+header h1 {
+  margin: 0 0 4px;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+header p {
+  margin: 0 0 32px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+}
+.drop {
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius);
+  padding: 40px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  background: transparent;
+}
+.drop:hover, .drop.dragging {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.drop strong { font-size: 16px; }
+.drop small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-top: 6px;
+}
+input[type="file"] { display: none; }
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+input[type="url"] {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+input[type="url"]:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface);
+}
+button {
+  padding: 10px 16px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: white;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+button:hover { opacity: 0.9; }
+button:disabled { opacity: 0.5; cursor: wait; }
+.label {
+  display: block;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+.status {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  display: none;
+}
+.status.show { display: block; }
+.status.success { background: rgba(45,143,92,0.12); color: var(--success); }
+.status.error { background: rgba(196,56,56,0.12); color: var(--danger); }
+.status.pending { background: var(--surface-2); color: var(--text-muted); }
+.recent {
+  margin-top: 32px;
+}
+.recent h2 {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 10px;
+}
+.item {
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.item-title {
+  font-size: 14px;
+  font-weight: 500;
+  margin: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.item-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.item-kind {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.empty {
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 16px;
+  text-align: center;
+}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Hearth Inbox</h1>
+    <p>Drop files, paste URLs, or click to browse. Everything lands in <code>~/vault-friday/Inbox/</code>.</p>
+  </header>
+
+  <div class="card">
+    <label class="label">Upload file</label>
+    <div class="drop" id="drop">
+      <strong>Drop a file here</strong>
+      <small>PDF, DOCX, HTML, Markdown, TXT, or image (PNG, JPEG, GIF, WebP). Max 50 MB.</small>
+      <input type="file" id="file" accept=".pdf,.docx,.html,.htm,.md,.txt,.png,.jpg,.jpeg,.gif,.webp" />
+    </div>
+    <div class="status" id="upload-status"></div>
+  </div>
+
+  <div class="card">
+    <label class="label" for="url">Capture URL</label>
+    <div class="row">
+      <input type="url" id="url" placeholder="https://example.com/article" />
+      <button id="url-submit">Capture</button>
+    </div>
+    <div class="status" id="url-status"></div>
+  </div>
+
+  <div class="recent">
+    <h2>Recent</h2>
+    <div id="recent-list"></div>
+  </div>
+</main>
+
+<script>
+const drop = document.getElementById('drop');
+const file_input = document.getElementById('file');
+const upload_status = document.getElementById('upload-status');
+const url_input = document.getElementById('url');
+const url_submit = document.getElementById('url-submit');
+const url_status = document.getElementById('url-status');
+const recent_list = document.getElementById('recent-list');
+
+function set_status(el, message, kind) {
+  el.textContent = message;
+  el.className = 'status show ' + kind;
+}
+function clear_status(el) {
+  el.className = 'status';
+}
+
+drop.addEventListener('click', () => file_input.click());
+
+drop.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  drop.classList.add('dragging');
+});
+drop.addEventListener('dragleave', () => drop.classList.remove('dragging'));
+drop.addEventListener('drop', (e) => {
+  e.preventDefault();
+  drop.classList.remove('dragging');
+  if (e.dataTransfer.files.length > 0) upload_file(e.dataTransfer.files[0]);
+});
+
+file_input.addEventListener('change', () => {
+  if (file_input.files.length > 0) upload_file(file_input.files[0]);
+});
+
+async function upload_file(file) {
+  set_status(upload_status, `Uploading ${file.name}…`, 'pending');
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const res = await fetch('/inbox/upload', { method: 'POST', body: form });
+    const json = await res.json();
+    if (!res.ok) {
+      set_status(upload_status, `Error: ${json.error || res.statusText}`, 'error');
+      return;
+    }
+    set_status(upload_status, `Saved as ${json.wrapper_note_path}`, 'success');
+    file_input.value = '';
+    await refresh_recent();
+  } catch (err) {
+    set_status(upload_status, `Error: ${err.message}`, 'error');
+  }
+}
+
+url_submit.addEventListener('click', submit_url);
+url_input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit_url(); });
+
+async function submit_url() {
+  const url = url_input.value.trim();
+  if (!url) return;
+  set_status(url_status, `Fetching ${url}…`, 'pending');
+  url_submit.disabled = true;
+  try {
+    const res = await fetch('/inbox/url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      set_status(url_status, `Error: ${json.error || res.statusText}`, 'error');
+      return;
+    }
+    set_status(url_status, `Saved as ${json.wrapper_note_path}`, 'success');
+    url_input.value = '';
+    await refresh_recent();
+  } catch (err) {
+    set_status(url_status, `Error: ${err.message}`, 'error');
+  } finally {
+    url_submit.disabled = false;
+  }
+}
+
+async function refresh_recent() {
+  try {
+    const res = await fetch('/inbox/recent?limit=20');
+    const json = await res.json();
+    render_recent(json.items);
+  } catch (err) {
+    recent_list.innerHTML = `<div class="empty">Failed to load recent items: ${err.message}</div>`;
+  }
+}
+
+function render_recent(items) {
+  if (!items || items.length === 0) {
+    recent_list.innerHTML = `<div class="empty">No items yet. Drop a file or paste a URL above.</div>`;
+    return;
+  }
+  recent_list.innerHTML = items.map((it) => {
+    const ts = new Date(it.captured_at).toLocaleString();
+    return `
+      <div class="item">
+        <span class="item-kind">${escape_html(it.kind)}</span>
+        <p class="item-title" title="${escape_html(it.path)}">${escape_html(it.title)}</p>
+        <span class="item-meta">${ts}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function escape_html(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+refresh_recent();
+</script>
+</body>
+</html>

@@ -1,0 +1,753 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hearth — Compute & Model Fleet</title>
+<!-- Mirror the user's chosen theme BEFORE first paint (matches app.js's
+     hearth-app-settings-v1 → data-theme contract) so the map opens in the
+     same skin as the rest of /app. No FOUC. -->
+<script>
+  (function () {
+    try {
+      var s = JSON.parse(localStorage.getItem('hearth-app-settings-v1') || '{}');
+      var t = s.theme || 'auto';
+      document.documentElement.dataset.theme = t;
+      document.documentElement.style.colorScheme =
+        t === 'light' ? 'light' : (t === 'auto' ? 'light dark' : 'dark');
+    } catch (e) { /* private mode — fall through to OS scheme */ }
+  })();
+</script>
+<!-- Inherit Hearth's design tokens + dark-mode handling. -->
+<link rel="stylesheet" href="/app/app.css">
+<style>
+  /* ── Page scaffolding ──────────────────────────────────────────────
+     app.css pins `html, body { height:100%; overflow:hidden }` for the
+     SPA shell — this is a standalone scrolling page, so reclaim scroll. */
+  html, body {
+    height: auto;
+    min-height: 100%;
+    overflow: auto;
+    overflow-x: hidden;
+  }
+  body {
+    background:
+      radial-gradient(1100px 520px at 88% -8%, color-mix(in srgb, var(--accent) 9%, transparent) 0%, transparent 60%),
+      radial-gradient(900px 480px at 6% 4%, color-mix(in srgb, var(--specialist-accent-iris) 7%, transparent) 0%, transparent 55%),
+      var(--bg);
+    padding: clamp(16px, 3vw, 40px);
+    padding-bottom: 64px;
+  }
+  .wrap { max-width: 1240px; margin: 0 auto; }
+
+  /* ── Header ─────────────────────────────────────────────────────── */
+  .page-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--space-5);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-6);
+  }
+  .back {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: var(--text-body-sm); color: var(--text-muted);
+    text-decoration: none; margin-bottom: var(--space-2);
+    transition: color .15s var(--ease-out);
+  }
+  .back:hover { color: var(--accent); }
+  .page-head h1 {
+    margin: 0;
+    font-size: clamp(26px, 3.6vw, var(--text-display));
+    font-weight: 700; letter-spacing: -0.02em; line-height: var(--lh-tight);
+  }
+  .page-head .sub {
+    margin: var(--space-2) 0 0; max-width: 56ch;
+    color: var(--text-muted); font-size: var(--text-body);
+    line-height: var(--lh-body);
+  }
+  .head-right {
+    display: flex; flex-direction: column; align-items: flex-end;
+    gap: var(--space-2); text-align: right;
+  }
+  .summary-pills { display: inline-flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .sp {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 999px;
+    font-size: var(--text-caption); font-weight: 600;
+    letter-spacing: .02em; font-variant-numeric: tabular-nums;
+    border: 1px solid var(--border); background: var(--surface);
+    color: var(--text-muted);
+  }
+  .sp b { color: var(--text); font-weight: 700; }
+  .sp .fx-dot { width: 7px; height: 7px; }
+  .freshness {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: var(--text-caption); color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .freshness b { color: var(--text); font-weight: 600; }
+  .live-pip {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--success) 80%, transparent);
+  }
+  .live-pip.flash { animation: live-flash .7s var(--ease-out); }
+  @keyframes live-flash {
+    0% { transform: scale(2.1); opacity: .2; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .live-pip.stale { background: var(--amber); box-shadow: 0 0 6px color-mix(in srgb, var(--amber) 80%, transparent); }
+
+  /* ── Section labels ─────────────────────────────────────────────── */
+  .section-label {
+    display: flex; align-items: center; gap: 10px;
+    font-size: var(--text-caption); font-weight: 700;
+    letter-spacing: .14em; text-transform: uppercase;
+    color: var(--text-muted);
+    margin: var(--space-7) 0 var(--space-4);
+  }
+  .section-label::after {
+    content: ''; flex: 1; height: 1px;
+    background: linear-gradient(90deg, var(--border), transparent);
+  }
+  section:first-of-type .section-label { margin-top: 0; }
+
+  /* ── Boxes ──────────────────────────────────────────────────────── */
+  .boxes { display: flex; flex-direction: column; gap: var(--space-4); }
+  .fx-box {
+    --box-accent: var(--accent);
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 4px);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .fx-box::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px; background: var(--box-accent);
+    opacity: .85;
+  }
+  .fx-box.glacier   { --box-accent: var(--accent); }
+  .fx-box.forza     { --box-accent: var(--specialist-accent-iris); }
+  .fx-box.avalanche { --box-accent: var(--specialist-accent-cassandra); }
+
+  .box-head {
+    display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+    padding: var(--space-4) var(--space-5);
+    padding-left: calc(var(--space-5) + 4px);
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--box-accent) 6%, var(--surface)), var(--surface));
+  }
+  .box-kind {
+    font-size: 10px; font-weight: 800; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--box-accent);
+    border: 1px solid color-mix(in srgb, var(--box-accent) 40%, transparent);
+    background: color-mix(in srgb, var(--box-accent) 12%, transparent);
+    padding: 3px 7px; border-radius: 6px; align-self: center;
+  }
+  .box-name { font-size: var(--text-head); font-weight: 700; letter-spacing: -0.01em; }
+  .box-ip {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: var(--text-body-sm); color: var(--text-muted);
+  }
+  .box-role { color: var(--text-muted); font-size: var(--text-body-sm); flex: 1 1 240px; min-width: 0; }
+  .box-hw {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px; color: var(--text-muted);
+    width: 100%; opacity: .85;
+  }
+  .box-health { display: inline-flex; align-items: center; gap: 5px; align-self: center; }
+
+  /* Units stack as horizontal bands (GPU / CPU tiers) separated by a
+     hairline — no equal-height column stretch, so a single-service unit
+     doesn't leave a tall void below its card. */
+  .units { display: flex; flex-direction: column; }
+  .fx-unit { padding: var(--space-4) var(--space-5); padding-left: calc(var(--space-5) + 4px); }
+  .fx-unit + .fx-unit { border-top: 1px solid var(--border); }
+  .unit-head {
+    display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+    margin-bottom: var(--space-3);
+  }
+  .unit-chip {
+    font-size: 9.5px; font-weight: 800; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--text-muted);
+    border: 1px solid var(--border-strong); border-radius: 5px;
+    padding: 2px 6px;
+  }
+  .unit-chip.gpu { color: var(--box-accent); border-color: color-mix(in srgb, var(--box-accent) 45%, transparent); }
+  .unit-label { font-weight: 700; font-size: var(--text-body); }
+  .unit-tier {
+    font-size: var(--text-caption); color: var(--box-accent); font-weight: 600;
+  }
+  .unit-detail {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10.5px; color: var(--text-muted); margin-left: auto;
+  }
+
+  /* Capped-width columns, left-aligned (auto-FILL, not fit) so cards stay a
+     comfortable 272–340px and never stretch to fill a sparse row — a unit
+     with one service shows one card with open space to its right, not a
+     stretched panel. */
+  .services {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(272px, 340px));
+    justify-content: start;
+    align-items: start;
+    gap: var(--space-3);
+  }
+
+  .fx-svc {
+    position: relative;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    background: var(--surface-2);
+    transition: border-color .2s var(--ease-out), transform .15s var(--ease-out), box-shadow .2s var(--ease-out);
+  }
+  .fx-svc:hover { transform: translateY(-1px); box-shadow: 0 4px 14px color-mix(in srgb, var(--text) 7%, transparent); border-color: var(--border-strong); }
+  .fx-svc[data-status='down'] { background: color-mix(in srgb, var(--danger) 5%, var(--surface-2)); border-color: color-mix(in srgb, var(--danger) 28%, var(--border)); }
+  .fx-svc[data-status='degraded'] { border-color: color-mix(in srgb, var(--amber) 32%, var(--border)); }
+
+  .svc-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .svc-name { font-weight: 650; font-size: var(--text-body); }
+  .svc-port {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px; color: var(--text-muted);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 5px; padding: 1px 6px;
+  }
+  .svc-badge {
+    font-size: 10px; font-weight: 600; letter-spacing: .02em;
+    color: var(--box-accent);
+    background: color-mix(in srgb, var(--box-accent) 11%, transparent);
+    border: 1px solid color-mix(in srgb, var(--box-accent) 26%, transparent);
+    border-radius: 999px; padding: 2px 8px; margin-left: auto;
+  }
+  .svc-model {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px; color: var(--text); margin-top: 7px;
+    word-break: break-word;
+  }
+  .svc-purpose {
+    font-size: var(--text-body-sm); color: var(--text-muted);
+    line-height: 1.5; margin-top: 5px;
+  }
+  .svc-roles { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 9px; }
+  .role-chip {
+    font-size: 10.5px; color: var(--text-muted);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 5px; padding: 2px 7px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .svc-metrics { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+  .metric {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; padding: 2px 8px;
+  }
+  .metric.active { color: var(--success); border-color: color-mix(in srgb, var(--success) 35%, var(--border)); }
+  .metric .m-k { color: var(--text-muted); font-weight: 500; }
+  .svc-latency {
+    font-size: 10px; color: var(--text-muted); opacity: .8;
+    font-variant-numeric: tabular-nums; margin-left: 4px;
+  }
+
+  /* ── Health dot ─────────────────────────────────────────────────── */
+  .fx-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    position: relative; flex: none; background: var(--text-muted);
+  }
+  .fx-dot::after {
+    content: ''; position: absolute; inset: 0; border-radius: 50%;
+    background: currentColor; opacity: 0; z-index: -1;
+  }
+  .fx-dot.up       { color: var(--success); background: var(--success); box-shadow: 0 0 6px color-mix(in srgb, var(--success) 60%, transparent); }
+  .fx-dot.degraded { color: var(--amber);   background: var(--amber);   box-shadow: 0 0 6px color-mix(in srgb, var(--amber) 60%, transparent); }
+  .fx-dot.down     { color: var(--danger);  background: var(--danger); }
+  .fx-dot.unknown  { color: var(--text-muted); background: var(--text-muted); opacity: .45; }
+  .fx-dot.up::after       { animation: fx-ping 2.6s var(--ease-out) infinite; }
+  .fx-dot.degraded::after { animation: fx-ping 1.3s var(--ease-out) infinite; }
+  .fx-dot.down::after     { animation: fx-ping 3.4s var(--ease-out) infinite; }
+  @keyframes fx-ping {
+    0%   { transform: scale(1); opacity: .55; }
+    70%  { transform: scale(2.6); opacity: 0; }
+    100% { transform: scale(2.6); opacity: 0; }
+  }
+
+  /* ── Flows ──────────────────────────────────────────────────────── */
+  .flows { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: var(--space-3); }
+  .flow {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 13px 16px; box-shadow: var(--shadow);
+  }
+  .flow-name { font-weight: 700; font-size: var(--text-body-sm); margin-bottom: 9px; }
+  .flow-chain { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .stage {
+    display: inline-flex; flex-direction: column; gap: 1px;
+    padding: 5px 10px; border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    font-size: 11.5px; font-weight: 650; line-height: 1.2;
+    white-space: nowrap;
+  }
+  .stage .stage-sub { font-size: 9.5px; font-weight: 500; color: var(--text-muted); letter-spacing: .01em; }
+  .stage.glacier   { border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: color-mix(in srgb, var(--accent) 10%, var(--surface-2)); color: var(--text); }
+  .stage.forza     { border-color: color-mix(in srgb, var(--specialist-accent-iris) 50%, transparent); background: color-mix(in srgb, var(--specialist-accent-iris) 13%, var(--surface-2)); }
+  .stage.ada2      { border-color: color-mix(in srgb, var(--specialist-accent-eleanor) 50%, transparent); background: color-mix(in srgb, var(--specialist-accent-eleanor) 13%, var(--surface-2)); }
+  .stage.ext       { color: var(--text-muted); }
+  .arrow { color: var(--text-muted); font-size: 13px; opacity: .6; }
+  .flow-note { font-size: 11px; color: var(--text-muted); margin-top: 9px; line-height: 1.45; }
+  .flow-note code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px;
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px;
+  }
+
+  /* ── Layers ─────────────────────────────────────────────────────── */
+  .layers { display: grid; grid-template-columns: repeat(auto-fit, minmax(248px, 1fr)); gap: var(--space-3); }
+  .layer {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 15px 16px; box-shadow: var(--shadow);
+  }
+  .layer.span2 { grid-column: span 2; }
+  @media (max-width: 720px) { .layer.span2 { grid-column: span 1; } }
+  .layer h3 { margin: 0 0 6px; font-size: var(--text-body); font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .layer .glyph { font-size: 15px; }
+  .layer p { margin: 0; font-size: var(--text-body-sm); color: var(--text-muted); line-height: 1.5; }
+  .specialists { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 11px; }
+  .spec-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11.5px; padding: 3px 9px 3px 7px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface-2);
+  }
+  .spec-chip .pip { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .spec-chip .r { color: var(--text-muted); font-size: 9.5px; }
+
+  /* ── Supporting ─────────────────────────────────────────────────── */
+  .support-note { font-size: var(--text-body-sm); color: var(--text-muted); margin: 0 0 var(--space-3); line-height: 1.5; }
+  .support-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--space-3); }
+  .support-group {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 13px 15px;
+  }
+  .support-group h4 {
+    margin: 0 0 9px; font-size: 10.5px; font-weight: 800;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted);
+  }
+  .support-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .support-chips span {
+    font-size: 11.5px; color: var(--text);
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 3px 9px;
+  }
+  .support-chips span small { color: var(--text-muted); font-size: 10px; }
+
+  /* ── Footer ─────────────────────────────────────────────────────── */
+  footer.fx-foot {
+    margin-top: var(--space-7); padding-top: var(--space-4);
+    border-top: 1px solid var(--border);
+    display: flex; gap: 16px; flex-wrap: wrap; justify-content: space-between;
+    font-size: var(--text-caption); color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  footer.fx-foot code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fx-dot::after, .live-pip.flash { animation: none !important; }
+  }
+  @media (max-width: 560px) {
+    .head-right { align-items: flex-start; text-align: left; }
+    .summary-pills, .freshness { justify-content: flex-start; }
+    .flows { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="page-head">
+    <div class="head-left">
+      <a class="back" href="/app/">&larr; Hearth</a>
+      <h1>Compute &amp; Model Fleet</h1>
+      <p class="sub">Three boxes, a handful of GPUs, ~18 specialist personas over a shared model tier.
+        Here's the live wiring — and how chat, voice, deliberation, RAG, vision &amp; speech compose across it.</p>
+    </div>
+    <div class="head-right">
+      <div class="summary-pills" id="summary"></div>
+      <div class="freshness">
+        <span class="live-pip" id="pip"></span>
+        <span id="fresh">connecting&hellip;</span>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <div class="section-label">The boxes</div>
+    <div class="boxes" id="boxes"></div>
+  </section>
+
+  <section>
+    <div class="section-label">How it composes</div>
+    <div class="flows" id="flows"></div>
+  </section>
+
+  <section>
+    <div class="section-label">The logical layers</div>
+    <div class="layers" id="layers"></div>
+  </section>
+
+  <section>
+    <div class="section-label">Tool surface &middot; supporting services</div>
+    <p class="support-note">Reached on demand by specialists — not part of the always-on inference path, so they're listed, not health-polled.</p>
+    <div class="support-grid" id="support"></div>
+  </section>
+
+  <footer class="fx-foot">
+    <span id="foot-left">&nbsp;</span>
+    <span>Hearth fleet map &middot; health polled every 6s &middot; LAN-only</span>
+  </footer>
+</div>
+
+<script>
+// ── Offline-fallback box structure ──────────────────────────────────────
+// Mirrors src/app/routes/topology.ts TOPOLOGY. The server is the source of
+// truth (it adds live health); this renders instantly on load and is the
+// fallback if /app/api/topology can't be reached. Keep the two in sync.
+const FALLBACK_BOXES = [
+  { id:'glacier', name:'the LLM host', ip:'<your-llm-host-ip>', kind:'hub',
+    role:'The hub — always-on home stack: both LLM lanes, vision, RAG, speech',
+    hardware:'Xeon 678X · 96t · 125 GB RAM · 2× RTX 6000 Ada 48 GB',
+    units:[
+      { id:'glacier-ada1', kind:'gpu', label:'RTX 6000 Ada #1', tier:'Interactive + voice', detail:'48 GB · ~960 GB/s · GPU-6d06a9c8', services:[
+        { id:'interactive-35b', name:'llama.cpp', port:8200, model:'Qwen3.6-35B-A3B Heretic Q5_K_M',
+          roles:['specialist','live','planner','arbiter','voice_realtime'], badge:'-np 4 · 49K/slot · think-OFF',
+          purpose:'Every latency-sensitive turn — typed chat, realtime voice, planning, the agent-room arbiter.' },
+        { id:'tts-laur', name:'faster-qwen3-tts', port:8023, model:'Qwen3-TTS-1.7B · Laur clone', roles:['voice TTS'], badge:'VoiceClone',
+          purpose:"The household's cloned voice — the HA speaker + the web/iOS voice path. Ported off forza 2026-07-02." },
+        { id:'stt-parakeet', name:'speaches · parakeet', port:8093, model:'faster-whisper-large-v3-turbo + Kokoro',
+          roles:['STT','TTS preset'], badge:'STT ~150 ms',
+          purpose:'Speech → text for voice turns (~150 ms), plus the Kokoro preset voice.' },
+        { id:'rag-infinity', name:'infinity', port:8091, model:'bge-large-en-v1.5 + bge-reranker-v2-m3',
+          roles:['embeddings','reranker'], badge:'1024-dim',
+          purpose:'Text → vectors + cross-encoder rerank — the RAG brain behind retrieve_hybrid.' },
+        { id:'frigate', name:'Frigate', port:5000, model:'TensorRT detector', roles:['camera detection'], badge:'TensorRT',
+          purpose:'Continuous camera object/person detection feeding household awareness — a GPU co-tenant, not an LLM.' },
+        { id:'plex', name:'Plex', port:32400, model:'NVENC transcode', roles:['media transcode'], badge:'NVENC',
+          purpose:'Media transcode — the other GPU co-tenant. Listed because it competes for this card, not because Hearth infers on it.' } ] },
+      { id:'glacier-ada2', kind:'gpu', label:'RTX 6000 Ada #2', tier:'Deep + vision', detail:'48 GB · ~960 GB/s · GPU-510eee08', services:[
+        { id:'deep-35b', name:'llama.cpp', port:8201, model:'Qwen3.6-35B-A3B Heretic Q5_K_M',
+          roles:['specialist_deliberation','deep_consult','specialist_thinking','judgment','research_extract','librarian','reflector','scribe_writer','specialist_drafter','concierge_drafter'],
+          badge:'-np 8 · 49K/slot',
+          purpose:'The think tier — deliberation briefs, deep_consult escalation, research, and the five LLM-judge guards. Split off the interactive lane 2026-07-30 so a chat turn never queues behind a deliberation sweep.' },
+        { id:'vision-27b', name:'llama.cpp', port:8203, model:'Qwen3.6-27B Q4_K_M (VL, f16 encoder)', roles:['vision'], badge:'-np 2 · Q4_K_M · VL',
+          purpose:"Cordelia's capture classifier + image consults — the `vision` role. Local since 2026-07-30 (was forza :8096 vLLM; 3s vs 21s per glance)." } ] },
+      { id:'glacier-cpu', kind:'cpu', label:'Xeon CPU', tier:'OCR · status', detail:'96t · AMX BF16 · NUMA-pinned', services:[
+        { id:'status-flavor', name:'llama.cpp · container', port:8202, model:'Qwen2.5-1.5B-Instruct Q4_K_M', roles:['status_flavor'], badge:'CPU · RAM',
+          purpose:'The one-line "thinking…" phrase under the typing bubble. Cosmetic + fail-open, in system RAM off both GPUs so it can never contend.' },
+        { id:'ocr-paddle', name:'hearth-ocr', model:'PaddleOCR', roles:['ocr'], badge:'fallback',
+          purpose:'OCR fallback when on-device Vision OCR comes back empty.' } ] }
+    ] },
+  { id:'forza', name:'forza', ip:'192.168.0.188', kind:'compute',
+    role:'The big-judge lane — the 122B escalation target, plus GPU image gen',
+    hardware:'DGX Spark · GB10 · 128 GB unified · ~273 GB/s',
+    units:[
+      { id:'forza-gb10', kind:'gpu', label:'GB10', tier:'Deep judge · image gen', detail:'128 GB unified · ~273 GB/s', services:[
+        { id:'deep-judge-122b', name:'llama.cpp', port:8090, model:'Qwen3.5-122B-A10B UD-Q4_K_XL (VL)', roles:['deep_consult'], badge:'-np 2 · 32K ctx · think-ON',
+          purpose:"consult_deep_model's escalation target — a chat turn hands off a hard sub-question and gets the big judge back, think-ON. Natively VL, so deep image work lands here too." },
+        { id:'imagegen-krea2', name:'ComfyUI', port:8188, model:'Krea 2 Turbo', roles:['generate_image'], badge:'GPU',
+          purpose:'The generate_image chat tool, on GPU.' } ] }
+    ] },
+  { id:'avalanche', name:'the workstation', ip:'192.168.0.11', kind:'browser',
+    role:'Real-browser actions for hostile / JS-heavy pages',
+    hardware:'Browser host · agentd + warmed Firefox',
+    units:[
+      { id:'avalanche-host', kind:'cpu', label:'Browser host', tier:'Web actions', detail:'agentd · Firefox', services:[
+        { id:'agentd', name:'agentd', port:4446, model:'Firefox (warmed profile)', roles:['browse_url'], badge:'on-demand',
+          purpose:'The browse_url escape hatch — drives a real warmed browser when web_fetch_clean fails. Wakes on demand.' } ] }
+    ] }
+];
+
+// ── Narrative data (frontend-only; no live health) ──────────────────────
+const FLOWS = [
+  { name:'💬 Typed chat', steps:[
+      {l:'You', c:'ext'}, {l:'Ada #1 · 35B', s:'specialist / live', c:'glacier'}, {l:'reply', c:'ext'} ],
+    note:'Hard sub-questions escalate to the deep lane via <code>consult_deep_model</code>, woven back into the same reply.' },
+  { name:'🧠 Deep think', steps:[
+      {l:'Ada #1 · 35B', c:'glacier'}, {l:'consult_deep_model', s:'hand-off', c:'glacier'}, {l:'Ada #2 · 35B', s:'think-ON', c:'ada2'}, {l:'woven back', c:'glacier'} ],
+    note:'Same model on both lanes — the win is separation: the interactive card answers while the deep card does the slow reasoning.' },
+  { name:'🎙️ Voice loop', steps:[
+      {l:'Mic', c:'ext'}, {l:'Ada #1 · STT', s:'parakeet', c:'glacier'}, {l:'Ada #1 · 35B', s:'voice_realtime', c:'glacier'}, {l:'Ada #1 · TTS', s:'Laur clone', c:'glacier'}, {l:'Speaker', c:'ext'} ],
+    note:'All three stages share Ada #1 — they run sequentially within a turn, so they never contend. HA Assist + wyoming-openai drives the Satellite1 speaker.' },
+  { name:'🔎 RAG retrieval', steps:[
+      {l:'Query', c:'ext'}, {l:'FTS5', s:'SQLite', c:'glacier'}, {l:'Ada #1 · embed', s:'bge-large', c:'glacier'}, {l:'RRF fuse', c:'glacier'}, {l:'Ada #1 · rerank', s:'bge-reranker', c:'glacier'}, {l:'grounded', c:'glacier'} ],
+    note:'Lexical + vector results fused by Reciprocal Rank Fusion, then cross-encoder reranked — over the vault projection.' },
+  { name:'🖼️ Vision', steps:[
+      {l:'Photo', c:'ext'}, {l:'Ada #2 · 27B VL', s:'vision role', c:'ada2'}, {l:'route → specialist', c:'glacier'} ],
+    note:'Cordelia\'s capture classifier reads every photo; image consults from chat escalate here too. Local on the LLM host since 2026-07-30 — ~3s a glance, down from ~21s over the LAN.' },
+  { name:'📋 Deliberation', steps:[
+      {l:'Schedule', s:'07:00 …', c:'ext'}, {l:'Ada #2 · 35B', s:'8 slots', c:'ada2'}, {l:'brief', c:'ada2'}, {l:'dashboard', c:'glacier'} ],
+    note:'Awareness pings + scheduled passes + interrupts (the three-loop driver) make specialists proactive — off the interactive lane since the 2026-07-30 split.' }
+];
+
+const SPECIALISTS = [
+  ['kate','Kate','Chief of Staff','#7f5af0'], ['vivian','Vivian','Finance','#5b8e7d'],
+  ['anya','Anya','Pets','#c87065'], ['eleanor','Eleanor','Garden','#7a9b58'],
+  ['marguerite','Marguerite','','#9a7aa0'], ['iris','Iris','EV · Maps','#5e8aa8'],
+  ['cassandra','Cassandra','','#a87d4a'], ['cordelia','Cordelia','Visual capture','#c98a1f'],
+  ['linda','Linda','Resale','#5f7fb0'],
+  ['beatrice','Beatrice','Architect','#b07fb0'], ['ruby','Ruby','Civic','#c0506a'],
+  ['astrid','Astrid','Fitness','#5aa0c0'], ['brigid','Brigid','Food','#cf8a4a'],
+  ['anna','Anna','Property','#7a8a5a'], ['kristi','Kristi','Workstations','#8a7ad0'],
+  ['mariah','Mariah','Program · PM','#4a9a7a'], ['maggie','Maggie','Music','#b06a9a']
+];
+
+const LAYERS = [
+  { glyph:'👥', title:'~18 Specialists', span:true,
+    p:'Persona configs over the shared model tiers — <b>not</b> separate models. The situation picks the silicon: a chat turn → the interactive lane on Ada #1, a deliberation pass → the deep lane on Ada #2.',
+    specialists:true },
+  { glyph:'🧠', title:'Deep think',
+    p:'<code>consult_deep_model</code> hands a hard sub-question from the interactive lane to the deep lane (think-on) and weaves the answer back.' },
+  { glyph:'🔎', title:'RAG',
+    p:'<code>retrieve_hybrid</code> = FTS5 + vector cosine fused by RRF, then reranked — over the vault\'s SQLite projection.' },
+  { glyph:'🎙️', title:'Voice loop',
+    p:'STT → 35B → cloned TTS, wired two ways: Pipecat (iOS WebRTC) and HA Assist (the Satellite1 speaker).' },
+  { glyph:'🔁', title:'Three-loop driver',
+    p:'Awareness pings + scheduled deliberation + interrupts (<code>loops.ts</code>) — what makes the staff proactive.' },
+  { glyph:'📓', title:'The vault',
+    p:'<code>~/vault-friday</code> markdown + its SQLite projection — the authoritative knowledge everything grounds against.' }
+];
+
+const SUPPORT = [
+  ['Web', [['firecrawl','web_fetch_clean'], ['SearXNG','web_search'], ['agentd','browse_url']]],
+  ['Maps', [['OSRM','drive · bike · walk'], ['Nominatim','geocode']]],
+  ['Home', [['Home Assistant',''], ['Matter',''], ['Mosquitto','MQTT']]],
+  ['Media', [['Plex',''], ['*arr stack',''], ['sab · qbit',''], ['MeTube',''], ['Music Assistant','']]],
+  ['Food', [['Mealie','recipes']]],
+  ['Dev', [['Gitea',':3010'], ['Beatrice PRs','change-pipeline']]],
+  ['Edge', [['nginx','/api ↔ HA']]]
+];
+
+// ── Render ──────────────────────────────────────────────────────────────
+const $ = (s, r=document) => r.querySelector(s);
+const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+
+let lastGood = null;       // last successful payload
+let lastFetchOk = false;
+let generatedAt = null;    // Date of last server timestamp
+
+function dotClass(status) { return 'fx-dot ' + (status || 'unknown'); }
+
+const METRIC_LABELS = {
+  'llamacpp:requests_processing': (v) => ({ k:'in flight', v: String(Math.round(v)), active: v > 0 }),
+  'llamacpp:predicted_tokens_seconds': (v) => v > 0 ? ({ k:'tok/s', v: v.toFixed(0), active:false }) : null,
+  'llamacpp:n_busy_slots_per_decode': (v) => v > 0 ? ({ k:'slots', v: v.toFixed(1), active:false }) : null,
+  'vllm:num_requests_running': (v) => ({ k:'running', v: String(Math.round(v)), active: v > 0 }),
+  'vllm:num_requests_waiting': (v) => v > 0 ? ({ k:'queued', v: String(Math.round(v)), active:false }) : null,
+  'vllm:gpu_cache_usage_perc': (v) => ({ k:'KV', v: Math.round(v*100)+'%', active:false })
+};
+
+function renderMetrics(metrics) {
+  if (!metrics) return null;
+  const wrap = el('div', 'svc-metrics');
+  let any = false;
+  for (const [key, fn] of Object.entries(METRIC_LABELS)) {
+    if (!(key in metrics)) continue;
+    const out = fn(metrics[key]);
+    if (!out) continue;
+    any = true;
+    const m = el('span', 'metric' + (out.active ? ' active' : ''));
+    m.innerHTML = `<span class="m-v">${esc(out.v)}</span><span class="m-k">${esc(out.k)}</span>`;
+    wrap.appendChild(m);
+  }
+  return any ? wrap : null;
+}
+
+function renderBoxes(boxes, health) {
+  const root = $('#boxes');
+  root.innerHTML = '';
+  for (const box of boxes) {
+    const article = el('article', 'fx-box ' + box.id);
+    const head = el('div', 'box-head');
+    const kindLabel = { hub:'HUB', compute:'COMPUTE', browser:'BROWSER' }[box.kind] || box.kind;
+    head.appendChild(el('span', 'box-kind', kindLabel));
+    head.appendChild(el('span', 'box-name', esc(box.name)));
+    head.appendChild(el('span', 'box-ip', esc(box.ip)));
+    head.appendChild(el('span', 'box-role', esc(box.role)));
+    // box health pips
+    const allSvc = box.units.flatMap((u) => u.services);
+    const pips = el('span', 'box-health');
+    let upCount = 0;
+    for (const s of allSvc) {
+      const st = (health[s.id] || {}).status || 'unknown';
+      if (st === 'up') upCount++;
+      pips.appendChild(el('span', dotClass(st)));
+    }
+    head.appendChild(pips);
+    head.appendChild(el('span', 'box-hw', esc(box.hardware)));
+    article.appendChild(head);
+
+    const units = el('div', 'units');
+    for (const unit of box.units) {
+      const u = el('div', 'fx-unit');
+      const uh = el('div', 'unit-head');
+      uh.appendChild(el('span', 'unit-chip ' + (unit.kind === 'gpu' ? 'gpu' : 'cpu'), unit.kind.toUpperCase()));
+      uh.appendChild(el('span', 'unit-label', esc(unit.label)));
+      uh.appendChild(el('span', 'unit-tier', esc(unit.tier)));
+      if (unit.detail) uh.appendChild(el('span', 'unit-detail', esc(unit.detail)));
+      u.appendChild(uh);
+
+      const svcs = el('div', 'services');
+      for (const svc of unit.services) {
+        const h = health[svc.id] || { status:'unknown' };
+        const card = el('div', 'fx-svc');
+        card.dataset.status = h.status || 'unknown';
+        const top = el('div', 'svc-top');
+        top.appendChild(el('span', dotClass(h.status)));
+        top.appendChild(el('span', 'svc-name', esc(svc.name)));
+        if (svc.port) top.appendChild(el('span', 'svc-port', ':' + svc.port));
+        if (svc.badge) top.appendChild(el('span', 'svc-badge', esc(svc.badge)));
+        card.appendChild(top);
+        if (svc.model) card.appendChild(el('div', 'svc-model', esc(svc.model)));
+        card.appendChild(el('div', 'svc-purpose', esc(svc.purpose)));
+        if (svc.roles && svc.roles.length) {
+          const r = el('div', 'svc-roles');
+          for (const role of svc.roles) r.appendChild(el('span', 'role-chip', esc(role)));
+          card.appendChild(r);
+        }
+        const m = renderMetrics(h.metrics);
+        if (m) card.appendChild(m);
+        else if (h.latency_ms != null && (h.status === 'up' || h.status === 'degraded')) {
+          const lat = el('div', 'svc-metrics');
+          lat.appendChild(el('span', 'metric', `<span class="m-v">${h.latency_ms}</span><span class="m-k">ms</span>`));
+          card.appendChild(lat);
+        }
+        svcs.appendChild(card);
+      }
+      u.appendChild(svcs);
+      units.appendChild(u);
+    }
+    article.appendChild(units);
+    root.appendChild(article);
+  }
+}
+
+function renderSummary(summary) {
+  const root = $('#summary');
+  root.innerHTML = '';
+  if (!summary) return;
+  const order = [['up','up'], ['degraded','degraded'], ['down','down']];
+  for (const [key, cls] of order) {
+    if (!summary[key]) continue;
+    const pill = el('span', 'sp');
+    pill.appendChild(el('span', dotClass(cls)));
+    pill.innerHTML += `<b>${summary[key]}</b> ${key}`;
+    root.appendChild(pill);
+  }
+  const total = el('span', 'sp');
+  total.innerHTML = `<b>${summary.total}</b> services`;
+  root.appendChild(total);
+}
+
+function renderFlows() {
+  const root = $('#flows');
+  for (const flow of FLOWS) {
+    const f = el('div', 'flow');
+    f.appendChild(el('div', 'flow-name', esc(flow.name)));
+    const chain = el('div', 'flow-chain');
+    flow.steps.forEach((step, i) => {
+      const s = el('span', 'stage ' + (step.c || 'ext'));
+      s.innerHTML = `<span>${esc(step.l)}</span>` + (step.s ? `<span class="stage-sub">${esc(step.s)}</span>` : '');
+      chain.appendChild(s);
+      if (i < flow.steps.length - 1) chain.appendChild(el('span', 'arrow', '→'));
+    });
+    f.appendChild(chain);
+    if (flow.note) f.appendChild(el('div', 'flow-note', flow.note));
+    root.appendChild(f);
+  }
+}
+
+function renderLayers() {
+  const root = $('#layers');
+  for (const layer of LAYERS) {
+    const c = el('div', 'layer' + (layer.span ? ' span2' : ''));
+    c.appendChild(el('h3', null, `<span class="glyph">${layer.glyph}</span>${esc(layer.title)}`));
+    c.appendChild(el('p', null, layer.p));
+    if (layer.specialists) {
+      const wrap = el('div', 'specialists');
+      for (const [id, name, role, hue] of SPECIALISTS) {
+        const chip = el('span', 'spec-chip');
+        chip.title = role ? `${name} — ${role}` : name;
+        chip.innerHTML = `<span class="pip" style="background:${hue}"></span>${esc(name)}` + (role ? `<span class="r">${esc(role)}</span>` : '');
+        wrap.appendChild(chip);
+      }
+      c.appendChild(wrap);
+    }
+    root.appendChild(c);
+  }
+}
+
+function renderSupport() {
+  const root = $('#support');
+  for (const [group, items] of SUPPORT) {
+    const g = el('div', 'support-group');
+    g.appendChild(el('h4', null, esc(group)));
+    const chips = el('div', 'support-chips');
+    for (const [name, sub] of items) {
+      chips.appendChild(el('span', null, esc(name) + (sub ? ` <small>${esc(sub)}</small>` : '')));
+    }
+    g.appendChild(chips);
+    root.appendChild(g);
+  }
+}
+
+// ── Freshness ticker ────────────────────────────────────────────────────
+function fmtAgo(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return s + 's';
+  const m = Math.floor(s / 60); const r = s % 60;
+  return m + 'm' + (r ? ' ' + r + 's' : '');
+}
+function tickFreshness() {
+  const pip = $('#pip'); const fresh = $('#fresh');
+  if (!generatedAt) return;
+  const ago = Date.now() - generatedAt.getTime();
+  if (!lastFetchOk) { fresh.textContent = 'reconnecting…'; pip.classList.add('stale'); return; }
+  pip.classList.toggle('stale', ago > 20000);
+  fresh.innerHTML = 'updated <b>' + fmtAgo(ago) + '</b> ago';
+}
+
+// ── Poll ────────────────────────────────────────────────────────────────
+async function poll() {
+  try {
+    const res = await fetch('/app/api/topology', { headers: { accept: 'application/json' } });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    lastGood = data; lastFetchOk = true;
+    generatedAt = new Date(data.generated_at);
+    renderBoxes(data.boxes || FALLBACK_BOXES, data.health || {});
+    renderSummary(data.summary);
+    const foot = $('#foot-left');
+    if (foot) foot.innerHTML = `swept ${data.summary ? data.summary.total : '?'} services in <code>${data.probe_ms}ms</code>`;
+    const pip = $('#pip'); pip.classList.remove('flash'); void pip.offsetWidth; pip.classList.add('flash');
+  } catch (e) {
+    lastFetchOk = false;
+    // Keep the last good render; just mark freshness stale.
+  }
+  tickFreshness();
+}
+
+// ── Boot ────────────────────────────────────────────────────────────────
+renderBoxes(FALLBACK_BOXES, {});   // instant paint
+renderFlows();
+renderLayers();
+renderSupport();
+poll();
+setInterval(poll, 6000);
+setInterval(tickFreshness, 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+</script>
+</body>
+</html>

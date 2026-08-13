@@ -1,0 +1,16 @@
+[Unit]
+Description=Hearth voice stack: keep speaches STT/TTS models hot
+Wants=hearth-voice-prewarm.timer
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/hearth/ops/voice
+ExecStart=/usr/bin/env bash %h/hearth/ops/voice/prewarm.sh
+# Reads SPEACHES_URL / STT_MODEL / TTS_MODEL / TTS_VOICE from the environment;
+# defaults match the deployed parakeet container. Override here if they drift:
+# Environment=SPEACHES_URL=http://localhost:8093
+Nice=10
+TimeoutStartSec=2m
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,55 @@
+# Compose snippet for the Hearth Voice Coordinator — paste into
+# /docker/docker-compose.yml on the LLM host (the same project the orchestrator
+# lives in). The full loop is proven live (2026-06-07); deploying this is the
+# CUTOVER — it points the coordinator at .29 and contends with HA for the device
+# session (one client per device), so disable HA's integration for .29 first.
+# Owner-gated step; rollback = re-enable HA's integration (config, ~10 s).
+#
+# HOST networking is required: the coordinator dials the device on the LAN
+# (192.168.0.29:6053), parakeet (<your-llm-host-ip>:8093), forza (192.168.0.188:8023),
+# and the orchestrator on localhost (127.0.0.1:7700).
+#
+# Secrets (PSK + bearer) come from an env_file kept OFF the LLM-readable
+# surface — e.g. /docker/hearth/voice-coordinator.env, chmod 600, mirroring how
+# hearth.env / the Code Shop secret rule keep tokens out of YAML.
+
+services:
+  hearth-voice-coordinator:
+    build:
+      context: ./hearth/repo/integrations/voice-coordinator
+    image: hearth-voice-coordinator:latest
+    container_name: hearth-voice-coordinator
+    network_mode: host
+    restart: unless-stopped
+    env_file:
+      - /docker/hearth/voice-coordinator.env   # HEARTH_VC_DEVICE_PSK + HEARTH_INTERNAL_BEARER live here
+    environment:
+      # Non-secret config; secrets stay in the env_file above.
+      - HEARTH_VC_DEVICE_HOST=192.168.0.29
+      - HEARTH_VC_DEVICE_PORT=6053
+      - HEARTH_VC_DEVICE_NAME=satellite1
+      - HEARTH_VC_HEARTH_URL=http://127.0.0.1:7700
+      - HEARTH_VC_SPECIALIST=kate
+      - HEARTH_VC_USER_ID=jasper
+      - HEARTH_VC_STT_URL=http://<your-llm-host-ip>:8093/v1
+      - HEARTH_VC_STT_MODEL=deepdml/faster-whisper-large-v3-turbo-ct2
+      - HEARTH_VC_TTS_URL=http://192.168.0.188:8023/v1
+      - HEARTH_VC_TTS_VOICE=EN_F_Laur
+      - HEARTH_VC_TTS_MODEL=EN_F_Laur
+      - HEARTH_VC_HEALTH_PORT=8094
+      # The coordinator serves SPEAKING-state TTS clips at
+      # http://<SELF_HOST>:<HEALTH_PORT>/tts/<id>; the device fetches them, so this
+      # MUST be the coordinator's device-reachable LAN IP (the LLM host), not 127.0.0.1.
+      - HEARTH_VC_SELF_HOST=<your-llm-host-ip>
+      # The Silero VAD model is baked into the image (Dockerfile); override
+      # HEARTH_VC_VAD_MODEL only to mount a different copy.
+      # Barge-in floor — set from the §2 AEC test result before enabling
+      # full-duplex. Conservative default until measured.
+      - HEARTH_VC_BARGE_IN_SPEECH_THRESHOLD=0.7
+      - HEARTH_VC_LOG_LEVEL=INFO
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8094/health', timeout=3).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

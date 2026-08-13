@@ -1,0 +1,129 @@
+# Fixture household for self-contained smokes.
+#
+# Point a smoke's UserRegistry at this file rather than the live
+# `config/users.yaml`:
+#
+#     new UserRegistry(resolve(import.meta.dir, 'fixtures/users.yaml'), undefined, db)
+#
+# Why this exists: `config/users.yaml` is the REAL household roster. It is
+# untracked as of 2026-08-02 (the orchestrator rewrites it at runtime and it
+# holds credentials — see config/users.yaml.example), so a gate smoke that
+# reads it has nothing to read in CI's fresh checkout. Even before that it was
+# the wrong dependency: `smoke:visual-pipeline` asserted that Kim's routing
+# clamps to Linda, which was true of the COMMITTED file and already false on
+# the live box, where he had been granted eight specialists. A smoke that
+# grounds on production config passes or fails for reasons that have nothing
+# to do with the code under test.
+#
+# Keep the tiers, not the people: what smokes actually need is one owner, one
+# household member, and one narrowly-scoped friend. Add fields here as the
+# schema grows (UserConfigSchema in src/core/users.ts is strict — an unknown
+# field fails loudly).
+
+household:
+  brand: "Hearth"
+  home_name: "Fixture House"
+  primary_city: "Pleasantville"
+  primary_region: "Colorado"
+  usda_growing_zone: "5b"
+  partner_name: "Partner"
+  pets:
+    - name: "Fixture Dog"
+      species: "dog"
+  vehicles:
+    - make: "Hyundai"
+      model: "Ioniq 5"
+      kwh_per_mile: 0.35
+      usable_kwh: 77.4
+  nearby_venues:
+    - "Midtown Theatre"
+  nearby_cities:
+    - "Fairview"
+    - "Denver"
+
+users:
+  # The owner. Smokes that exercise the owner tier use this id; several also
+  # use `jasper_*` suffixed ids for per-case isolation, which resolve to no
+  # user by design (an unknown id must not silently inherit owner rights).
+  - id: "jasper"
+    display_name: "Jasper"
+    telegram_user_id: null
+    telegram_chat_id: null
+    app_token: null
+    allowed_specialists: "*"
+    timezone: "America/Denver"
+    notification_config_ref: "default_user"
+    theme: "dark"
+    role: "admin"
+    tier: "owner"
+    home_location:
+      lat: 39.739
+      lng: -104.990
+      label: "Pleasantville, CO"
+    # `smoke:brigid` asserts these exact values. They were copied from the
+    # committed household at the time this fixture was created — change them
+    # and change the smoke together, or leave them alone.
+    dietary:
+      daily_calorie_target: 2000
+      daily_calorie_max: 2000
+      macro_priority: "protein_high"
+      restrictions: []
+      favorites:
+        - "spicy"
+        - "mediterranean"
+        - "southeast asian"
+        - "vegetable-forward"
+      dislikes: []
+      portion_factor: 1.4
+
+  # A household member — sees shared entities plus their own data.
+  - id: "sam"
+    display_name: "Sam"
+    telegram_user_id: null
+    telegram_chat_id: null
+    app_token: null
+    allowed_specialists: "*"
+    timezone: "America/Denver"
+    notification_config_ref: "default"
+    theme: null
+    role: "user"
+    tier: "household"
+    home_location:
+      lat: 39.739
+      lng: -104.990
+      label: "Pleasantville, CO"
+    # Also asserted by `smoke:brigid`. The `shellfish` restriction is what its
+    # household-intersection check unions on; `dislikes` starts empty because
+    # the smoke's writer test is what adds one.
+    dietary:
+      daily_calorie_target: 1650
+      daily_calorie_max: 1650
+      macro_priority: "balanced"
+      macro_targets:
+        protein_g: 80
+        carbs_g: 160
+        fat_g: 55
+        fiber_g: 25
+        net_carbs_g: 130
+      restrictions:
+        - "shellfish"
+      favorites: []
+      dislikes: []
+      portion_factor: 1.0
+
+  # A friend scoped to ONE specialist. This is the shape
+  # `case_friend_routing_clamped` in smoke-visual-pipeline depends on: a
+  # capture whose content reads like a purchase must still not reach Vivian,
+  # because the candidate roster is clamped to `allowed_specialists` BEFORE
+  # classification. Widening this list silently disarms that assertion.
+  - id: "kim"
+    display_name: "Kim"
+    telegram_user_id: null
+    telegram_chat_id: null
+    app_token: null
+    allowed_specialists: ["linda"]
+    timezone: "America/Denver"
+    notification_config_ref: "default"
+    theme: null
+    role: "user"
+    tier: "friend"

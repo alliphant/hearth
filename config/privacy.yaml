@@ -1,0 +1,30 @@
+location:
+  audit_redaction: true              # set false only if you really
+                                     # want a location journal in audit log
+  journal_to_vault: false            # if true, append location to a
+                                     # Knowledge/Location/ daily file;
+                                     # default off
+  snapshot_ttl_minutes: 5
+
+browse:
+  audit_redaction: true              # browse_url records URLs host-only
+                                     # by default; set false to log full
+                                     # URLs (including paths and query
+                                     # strings) into audit_log
+
+cross_specialist_sharing:
+  read_my_location_granted_to:
+    - kate
+    - iris
+    - cassandra
+    # Ruby learns Jasper's location "corridors" (the routes he actually
+    # drives) so her civic office can promote traffic/construction on
+    # roads he uses over city-wide noise (cluster_location_corridors
+    # background job). She ALSO reads his recent trips on demand via the
+    # `recent_trips` tool when a chat is about somewhere he's been — an
+    # audited, on-request read, not background live tracking. No continuous
+    # location surveillance either way.
+    - ruby
+  # Other specialists won't see your location even if their capability
+  # matrix were edited — this is a per-specialist allowlist that's
+  # checked alongside the capability flag.

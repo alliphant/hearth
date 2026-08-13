@@ -1,0 +1,559 @@
+<!doctype html>
+<!-- data-theme lives on <html> (the document root) so <body>'s
+     background/color and the var()-indirection tokens in app.css resolve
+     against the themed root. Initial 'auto' is overwritten by
+     apply_settings() once app.js loads. -->
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<!-- Declare dark support at the DOCUMENT level. Without this (and the
+     matching documentElement.style.colorScheme set in apply_settings),
+     Edge's "Automatic Dark Mode for Web Contents" treats the page as a
+     light page and force-darkens our already-dark themes on top of
+     themselves — double-darkening dark/gilded/frosted. The per-theme
+     `color-scheme` rules in app.css sit on the inner #root div, which is
+     too deep for the UA's page-level dark-support check. -->
+<meta name="color-scheme" content="dark light" />
+<meta name="theme-color" content="#7f5af0" />
+<title>Hearth</title>
+<link rel="manifest" href="/app/manifest.webmanifest" />
+<link rel="icon" type="image/svg+xml" href="/app/api/avatars/kate" />
+<link rel="apple-touch-icon" href="/app/assets/icon-192.png" />
+<link rel="stylesheet" href="/app/app.css" />
+</head>
+<body>
+
+<!-- PR1: Hidden SVG defs — liquid-glass filters get injected here by
+     installLiquidGlass(). Wax-seal symbols + emboss filter are
+     pre-baked and available to any pass that wants to use them
+     (PR2 wires them into the staff list). -->
+<svg style="position:absolute; width:0; height:0;" aria-hidden="true"
+     color-interpolation-filters="sRGB">
+  <defs id="lg-defs"><!-- per-pane <filter> nodes appended here at runtime --></defs>
+  <defs>
+    <!-- Wax-seal blobs (two variants for variety) + emboss filter.
+         Available system-wide; PR2 swaps the staff-list avatars to
+         use them. Until then they're inert. -->
+    <symbol id="wax-blob" viewBox="0 0 44 44">
+      <path d="M22 2.5
+               C 28.5 2.2  34.5 4.4  37.8 9.2
+               C 41.1 14.0  41.8 19.6  40.5 24.8
+               C 39.2 30.0  36.0 34.6  31.6 37.4
+               C 27.2 40.2  21.6 41.0  16.4 39.8
+               C 11.2 38.6  6.4 35.6   3.8 31.0
+               C 1.2 26.4   0.8 20.6   2.6 15.4
+               C 4.4 10.2   8.4 5.8   13.6 3.6
+               C 16.4 2.4  19.0 2.6   22 2.5 Z
+               M 38.0 26.5
+               C 39.2 28.4  39.8 30.6  39.0 32.0
+               C 38.2 33.0  37.0 31.8  36.4 30.0
+               C 36.0 28.8  37.0 27.0  38.0 26.5 Z"/>
+    </symbol>
+    <symbol id="wax-blob-2" viewBox="0 0 44 44">
+      <path d="M22.5 3
+               C 29.0 2.8  35.5 5.6  38.2 11.0
+               C 41.0 16.4  40.6 22.6  38.0 27.4
+               C 35.4 32.2  31.0 36.4  25.6 38.0
+               C 20.2 39.6  14.0 38.6   9.4 35.2
+               C 4.8 31.8   1.8 26.0    2.0 20.4
+               C 2.2 14.8   5.6 9.4    10.6 6.2
+               C 14.0 4.0  18.4 3.2   22.5 3 Z
+               M 3.6 22.0
+               C 1.8 24.6   0.6 28.0   2.4 31.0
+               C 4.0 33.6   6.6 32.0   6.2 28.4
+               C 6.0 25.4   4.6 22.8   3.6 22.0 Z"/>
+    </symbol>
+    <radialGradient id="wax-fill" cx="36%" cy="30%" r="80%">
+      <stop offset="0%"   stop-color="#e36060"/>
+      <stop offset="30%"  stop-color="#b22a2a"/>
+      <stop offset="65%"  stop-color="#7a1414"/>
+      <stop offset="100%" stop-color="#330505"/>
+    </radialGradient>
+    <filter id="wax-emboss" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="1.1" result="aBlur"/>
+      <feOffset in="aBlur" dx="1.2" dy="1.6" result="aOff"/>
+      <feComposite in="aOff" in2="SourceAlpha" operator="arithmetic"
+                   k2="-1" k3="1" result="innerShadow"/>
+      <feFlood flood-color="#1a0303" flood-opacity="0.75" result="shadowColor"/>
+      <feComposite in="shadowColor" in2="innerShadow" operator="in" result="innerShadowColored"/>
+      <feSpecularLighting in="aBlur" surfaceScale="2.4" specularConstant="0.85"
+                          specularExponent="22" lighting-color="#ffdada" result="spec">
+        <feDistantLight azimuth="135" elevation="56"/>
+      </feSpecularLighting>
+      <feComposite in="spec" in2="SourceAlpha" operator="in" result="specMasked"/>
+      <feMerge>
+        <feMergeNode in="SourceGraphic"/>
+        <feMergeNode in="specMasked"/>
+        <feMergeNode in="innerShadowColored"/>
+      </feMerge>
+    </filter>
+  </defs>
+</svg>
+
+<div id="root">
+  <!-- Header. The avatar lives front-and-center as the "you're talking
+       to X" anchor; app actions sit on the right; the mobile staff
+       burger sits on the left so the three regions don't fight. -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="iconbtn topbar-menu mobile-only" id="btn-staff-tab" aria-label="Open staff" title="Staff">
+        <span class="icon">👥</span>
+      </button>
+    </div>
+    <div class="topbar-center">
+      <button class="conv-avatar-wrap" id="conv-avatar-wrap" type="button" aria-label="Change avatar" title="Change avatar">
+        <img class="conv-avatar" id="conv-avatar" alt="" />
+        <span class="conv-avatar-edit" aria-hidden="true">✎</span>
+      </button>
+      <div class="conv-meta">
+        <div class="conv-name-row">
+          <div class="conv-name" id="conv-name">Hearth</div>
+          <div class="conv-state" id="conv-state"></div>
+          <!-- Trust meter. Populated by update_trust_meter() from the
+               active specialist's authenticity score (Mariah's daily
+               scan_specialist_authenticity). Hidden until a score
+               exists for the active specialist; shows three bars
+               when ≥85, two at 70-84, one amber bar below 70. -->
+          <div class="trust-meter" id="trust-meter"
+               title="Authenticity score not yet computed for this specialist.">
+            <span class="trust-bars" aria-hidden="true"><span></span><span></span><span></span></span>
+            <span class="trust-text">trust · —</span>
+          </div>
+          <!-- Hearth rank badge — copper→diamond standing + level + XP bar.
+               Populated by update_rank_badge() from GET /api/specialists/:id/rank;
+               hidden until the Trust Ladder (HEARTH_TRUST_XP) is on + a rank exists. -->
+          <div class="rank-badge" id="rank-badge" hidden></div>
+        </div>
+        <div class="conv-role" id="conv-role"></div>
+      </div>
+      <!-- Activity LEDs (HDD-blink) — their own centered panel to the RIGHT
+           of the name/status/title block so the chunky bars + tags don't
+           overlap the role line. Driven by SSE (set_led/flash_led targets
+           `.led-<channel>` inside the cells, position-independent): live =
+           generating; rag = retrieval/consult; deep = deep-think on the Spark. -->
+      <span class="leds conv-leds" id="conv-leds" aria-hidden="true"><span class="led-cell"><i class="led led-live" title="Generating reply"></i><span class="led-tag">LIVE</span></span><span class="led-cell"><i class="led led-rag" title="Retrieving / consulting"></i><span class="led-tag">RAG</span></span><span class="led-cell"><i class="led led-deep" title="Deep-think on the Spark"></i><span class="led-tag">DEEP</span></span><span class="led-cell"><i class="led led-tool" title="Using a tool"></i><span class="led-tag">TOOL</span></span></span>
+    </div>
+    <div class="topbar-actions">
+      <!-- Context-window fill indicator. Same idea as Claude Code's
+           context pie — small donut that fills clockwise as the
+           active conversation accumulates tokens. Click for an info
+           tooltip. Updates on conv switch + on every message_added
+           SSE for the active conv. -->
+      <button class="context-fill" id="context-fill"
+              type="button" aria-haspopup="dialog" aria-expanded="false"
+              aria-label="Context window usage">
+        <svg class="context-fill-svg" viewBox="0 0 24 24" aria-hidden="true">
+          <circle class="context-fill-track" cx="12" cy="12" r="9" />
+          <circle class="context-fill-bar"   cx="12" cy="12" r="9"
+                  pathLength="100" stroke-dasharray="0 100" />
+        </svg>
+        <span class="context-fill-label" id="context-fill-label">—</span>
+      </button>
+      <div class="context-fill-popover" id="context-fill-popover"
+           role="dialog" aria-label="Context window details" hidden></div>
+      <button class="iconbtn" id="btn-new-conv" title="New conversation" aria-label="New conversation">
+        <span class="icon">＋</span>
+      </button>
+      <button class="iconbtn" id="btn-search" title="Search (⌘K)" aria-label="Search">
+        <span class="icon">🔍</span>
+      </button>
+      <button class="iconbtn" id="btn-queue" title="Awaiting your nod (⌘⇧Q)" aria-label="Queue">
+        <span class="icon">⏰</span>
+        <span class="badge" id="queue-badge" hidden>0</span>
+      </button>
+      <!-- Sub-agent tray (2026-07-14). Badge counts RUNNING delegations
+           (Kate's crew working in the background); the popover lists recent
+           delegations with status / elapsed / digest preview. SSE
+           delegation_started / delegation_completed invalidate; details are
+           fetched via the cordoned GET /api/specialists/kate/delegations. -->
+      <button class="iconbtn" id="btn-subagents" title="Sub-agents at work" aria-label="Sub-agents"
+              aria-haspopup="dialog" aria-expanded="false">
+        <span class="icon">🐝</span>
+        <span class="badge" id="subagents-badge" hidden>0</span>
+      </button>
+      <div class="subagents-popover" id="subagents-popover"
+           role="dialog" aria-label="Sub-agent delegations" hidden></div>
+      <!-- Agent Rooms — multi-specialist group chat. Owner-only; opens a
+           full-surface modal (room list + multi-speaker thread). SSE-driven:
+           agent replies stream in live, no polling. -->
+      <button class="iconbtn" id="btn-rooms" title="Agent Rooms" aria-label="Agent Rooms">
+        <span class="icon">🎭</span>
+      </button>
+      <a class="iconbtn" id="btn-files" href="/files" title="Library / file manager" aria-label="Library files" style="text-decoration:none">
+        <span class="icon">📁</span>
+      </a>
+      <button class="iconbtn" id="btn-roadmap" title="Roadmap" aria-label="Roadmap">
+        <span class="icon">🗺️</span>
+      </button>
+      <!-- Mobile-only overflow menu. The full topbar has too many icons to
+           fit on a phone; the desktop set hides via CSS and this button
+           shows instead, opening an action sheet with the secondary tools
+           (search, queue, files, roadmap, settings). Apple HIG pattern:
+           ellipsis-circle for "more". -->
+      <button class="iconbtn mobile-only" id="btn-overflow"
+              title="More" aria-label="More" aria-haspopup="menu" aria-expanded="false">
+        <span class="icon">⋯</span>
+      </button>
+      <div class="overflow-sheet" id="overflow-sheet" role="menu" hidden></div>
+      <!-- User bubble — combines connection status (formerly the
+           green LED) with the per-user menu (settings, lock, switch
+           user). Clicking opens a dropdown anchored to the bubble.
+           The bubble's outline color reflects connection state; the
+           avatar + name show the signed-in user. -->
+      <button class="user-bubble" id="user-bubble" type="button"
+              data-conn-state="connected"
+              aria-haspopup="menu" aria-expanded="false"
+              title="Account">
+        <img class="user-bubble-avatar" id="user-bubble-avatar" alt="" />
+        <span class="user-bubble-name" id="user-bubble-name">…</span>
+        <span class="user-bubble-chevron" aria-hidden="true">▾</span>
+      </button>
+      <div class="user-menu" id="user-menu" role="menu" hidden></div>
+    </div>
+  </header>
+
+  <!-- Three-pane layout -->
+  <main class="layout">
+    <!-- Left rail: staff -->
+    <aside class="rail rail-left" id="rail-left" data-pane="staff">
+      <!-- Consult thread SVG overlay — populated by JS during a
+           consult_specialist tool call. Hidden until cozy themes
+           + setting enabled. -->
+      <svg class="consult-thread-svg" id="consult-thread-svg" preserveAspectRatio="none">
+        <path   id="consult-thread-path" class="consult-thread-line" d=""/>
+        <g      id="consult-thread-motes"></g>
+        <circle id="consult-thread-recv" class="consult-thread-recv" cx="0" cy="0"/>
+      </svg>
+      <div class="rail-header">
+        <!-- PR1: Artemis-style HEARTH logotype.  Geometric caps with
+             a single ~23° diagonal cut (Earth-tilt). Theme-neutral —
+             colors via CSS via currentColor on the linearGradient. -->
+        <a class="wordmark" href="/app/" aria-label="Hearth — home">
+          <svg class="wordmark-mark" viewBox="0 0 200 40" aria-hidden="true">
+            <defs>
+              <linearGradient id="wordmark-grad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stop-color="currentColor" stop-opacity="1"/>
+                <stop offset="100%" stop-color="currentColor" stop-opacity="0.65"/>
+              </linearGradient>
+              <mask id="wordmark-cut">
+                <rect width="200" height="40" fill="white"/>
+                <line x1="-10" y1="44" x2="210" y2="-8"
+                      stroke="black" stroke-width="3.5"/>
+              </mask>
+            </defs>
+            <g mask="url(#wordmark-cut)">
+              <text x="0" y="32"
+                    font-family="'Bahnschrift', 'DIN Alternate', 'Eurostile', system-ui, sans-serif"
+                    font-weight="700"
+                    font-size="32"
+                    letter-spacing="5"
+                    fill="url(#wordmark-grad)">HEARTH</text>
+            </g>
+          </svg>
+        </a>
+      </div>
+      <div class="staff-list" id="staff-list"></div>
+      <div class="rail-footer">
+        <button class="hire-btn" id="btn-hire">+ Hire specialist</button>
+      </div>
+    </aside>
+
+    <!-- Center: conversation. The header that used to sit here was
+         absorbed into the global topbar (one row, bigger avatar). -->
+    <section class="center" id="center" data-pane="chat" data-surface="chat">
+      <!-- Specialist-as-Room (layout A): office ⇄ conversation toggle + the
+           server-composed office surface. Shown only for specialists whose
+           registry row carries a pane_kind; pane-less specialists open
+           straight to conversation (toggle stays hidden). -->
+      <div class="surface-toggle" id="surface-toggle" hidden>
+        <div class="seg" role="tablist" aria-label="Specialist surface">
+          <span class="seg-ind" id="seg-ind" aria-hidden="true"></span>
+          <button class="seg-btn active" id="seg-office" role="tab" aria-selected="true">Office</button>
+          <button class="seg-btn" id="seg-chat" role="tab" aria-selected="false">Conversation</button>
+        </div>
+      </div>
+      <div class="office-pane" id="office-pane"></div>
+      <div class="messages" id="messages">
+        <div class="empty empty-conv" id="empty-conv" hidden>
+          <img class="empty-portrait" id="empty-portrait" alt="" />
+          <p id="empty-greeting">Hi — what's on your mind?</p>
+          <p class="empty-sub" id="empty-sub"></p>
+        </div>
+      </div>
+      <div class="composer">
+        <button class="iconbtn composer-attach" id="btn-attach" title="Attach photos or files" aria-label="Attach">
+          <span class="icon">📎</span>
+        </button>
+        <textarea
+          id="composer-input"
+          placeholder="Talk to Kate…"
+          rows="1"
+          aria-label="Message"
+        ></textarea>
+        <button class="iconbtn composer-mic" id="btn-mic" title="Voice (placeholder)" aria-label="Voice">
+          <span class="icon">🎙</span>
+        </button>
+        <button class="send-btn" id="btn-send" aria-label="Send">Send</button>
+        <button class="send-btn stop-btn" id="btn-stop" aria-label="Stop" hidden>Stop</button>
+      </div>
+    </section>
+
+    <!-- Right rail: library + context -->
+    <aside class="rail rail-right" id="rail-right" data-pane="library">
+      <div id="right-content"></div>
+    </aside>
+    <!-- Collapse/expand handle for the right rail — a little bubble whose
+         caret rotates 180° between states. Desktop only (mobile tab-switches
+         the rails). State persists in localStorage. -->
+    <button class="rail-right-toggle" id="rail-right-toggle" type="button"
+            aria-label="Collapse panel" aria-expanded="true" title="Collapse panel">
+      <span class="caret" aria-hidden="true">›</span>
+    </button>
+  </main>
+
+  <!-- Mobile bottom tab bar -->
+  <nav class="tabbar mobile-only" id="tabbar">
+    <button class="tab" data-pane="chat" aria-label="Chat">
+      <span class="icon">💬</span><span class="tab-label">Chat</span>
+    </button>
+    <button class="tab" data-pane="staff" aria-label="Staff">
+      <span class="icon">👥</span><span class="tab-label">Staff</span>
+    </button>
+    <button class="tab" data-pane="library" aria-label="Library">
+      <span class="icon">📚</span><span class="tab-label">Library</span>
+    </button>
+    <button class="tab" data-pane="queue" aria-label="Queue">
+      <span class="icon">⏰</span><span class="tab-label">Queue</span>
+      <span class="badge" id="queue-tab-badge" hidden>0</span>
+    </button>
+  </nav>
+
+  <!-- Toasts -->
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <!-- Modals (hidden by default) -->
+  <div class="modal-backdrop" id="modal-backdrop" hidden></div>
+  <div class="modal modal-search" id="modal-search" hidden>
+    <div class="modal-inner">
+      <div class="search-row">
+        <input type="search" id="search-input" placeholder="Search chat, vault, proposals…" autocomplete="off" />
+        <button class="iconbtn" id="search-close" aria-label="Close">✕</button>
+      </div>
+      <div class="search-scopes" id="search-scopes">
+        <button class="chip active" data-scope="all">All</button>
+        <button class="chip" data-scope="chat">Chat</button>
+        <button class="chip" data-scope="vault">Vault</button>
+        <button class="chip" data-scope="proposals">Proposals</button>
+      </div>
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <div class="modal modal-roadmap" id="modal-roadmap" hidden>
+    <div class="modal-inner modal-inner-wide">
+      <div class="modal-header">
+        <h2>Roadmap <span class="roadmap-mtime" id="roadmap-mtime" title="PLAN.md last modified"></span></h2>
+        <button class="iconbtn" id="roadmap-close" aria-label="Close">✕</button>
+      </div>
+      <div class="roadmap-toolbar">
+        <div class="roadmap-filters" id="roadmap-filters">
+          <button class="chip active" data-filter="all">All</button>
+          <button class="chip" data-filter="not_started">Not started</button>
+          <button class="chip" data-filter="in_flight">In flight</button>
+          <button class="chip" data-filter="blocked">Blocked</button>
+          <button class="chip" data-filter="done">Shipped</button>
+        </div>
+        <div class="roadmap-counts" id="roadmap-counts"></div>
+      </div>
+      <div class="roadmap-body" id="roadmap-body">
+        <div class="roadmap-loading">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal modal-queue" id="modal-queue" hidden>
+    <div class="modal-inner">
+      <div class="modal-header">
+        <h2>Awaiting your nod</h2>
+        <button class="iconbtn" id="queue-close" aria-label="Close">✕</button>
+      </div>
+      <div class="queue-list" id="queue-list"></div>
+    </div>
+  </div>
+
+  <!-- Agent Rooms — multi-specialist group chat (owner-only). Two-pane:
+       room list + create form on the left, the multi-speaker thread +
+       composer on the right. Body is rendered by app.js (render_rooms_*);
+       it stays SSE-push (no polling) — room_message_added / room_turn_*. -->
+  <div class="modal modal-rooms" id="modal-rooms" hidden>
+    <div class="modal-inner modal-inner-rooms">
+      <div class="modal-header">
+        <h2>Agent Rooms</h2>
+        <button class="iconbtn" id="rooms-close" aria-label="Close">✕</button>
+      </div>
+      <div class="rooms-layout" id="rooms-layout">
+        <aside class="rooms-sidebar" id="rooms-sidebar"></aside>
+        <section class="rooms-main" id="rooms-main"></section>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal modal-settings" id="modal-settings" hidden>
+    <div class="modal-inner">
+      <div class="modal-header">
+        <h2>Settings</h2>
+        <button class="iconbtn" id="settings-close" aria-label="Close">✕</button>
+      </div>
+      <div class="settings-body" id="settings-body"></div>
+    </div>
+  </div>
+
+  <div class="modal modal-hire" id="modal-hire" hidden>
+    <div class="modal-inner modal-inner-wide">
+      <div class="modal-header">
+        <h2 id="hire-title">Hire a new specialist</h2>
+        <button class="iconbtn" id="hire-close" aria-label="Close">✕</button>
+      </div>
+      <div class="hire-body" id="hire-body"></div>
+      <div class="hire-footer" id="hire-footer"></div>
+    </div>
+  </div>
+
+  <div class="modal modal-profile" id="modal-profile" hidden>
+    <div class="modal-inner modal-inner-profile">
+      <button class="iconbtn profile-close" id="profile-close" aria-label="Close">✕</button>
+      <div class="profile-banner" id="profile-banner">
+        <button class="profile-banner-edit" id="profile-banner-edit" type="button" aria-label="Change banner" title="Change banner">
+          <span class="icon">🖼️</span><span>Banner</span>
+        </button>
+      </div>
+      <div class="profile-header">
+        <button class="profile-avatar-wrap" id="profile-avatar-wrap" type="button" aria-label="Change avatar" title="Change avatar">
+          <img class="profile-avatar" id="profile-avatar" alt="" />
+          <span class="profile-avatar-edit" aria-hidden="true">✎</span>
+        </button>
+        <div class="profile-identity">
+          <h2 class="profile-name" id="profile-name">—</h2>
+          <div class="profile-role" id="profile-role"></div>
+          <div class="profile-meta-line" id="profile-meta-line"></div>
+        </div>
+      </div>
+      <div class="profile-body" id="profile-body"><!-- sections filled by JS --></div>
+    </div>
+  </div>
+
+  <!-- Library item detail (fullscreen viewer for a knowledge-shelf clipping) -->
+  <div class="modal modal-library" id="modal-library" hidden>
+    <div class="modal-inner modal-inner-library">
+      <div class="modal-header">
+        <h2 id="library-detail-title">—</h2>
+        <a class="iconbtn library-detail-open" id="library-detail-open" target="_blank" rel="noopener" aria-label="Open in new tab" title="Open in new tab" hidden>↗</a>
+        <button class="iconbtn" id="library-detail-close" aria-label="Close">✕</button>
+      </div>
+      <div class="library-detail-body" id="library-detail-body">
+        <div class="library-detail-loading">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal modal-avatar" id="modal-avatar" hidden>
+    <div class="modal-inner">
+      <div class="modal-header">
+        <h2 id="avatar-title">Change avatar</h2>
+        <button class="iconbtn" id="avatar-close" aria-label="Close">✕</button>
+      </div>
+      <div class="avatar-body">
+        <div class="avatar-drop" id="avatar-drop" tabindex="0">
+          <img class="avatar-preview" id="avatar-preview" alt="" />
+          <div class="avatar-drop-hint" id="avatar-drop-hint">
+            Drop a PNG, JPG, WebP, GIF, or SVG here<br/>
+            <span class="muted">— or click to choose a file (max 5 MB)</span>
+          </div>
+          <input type="file" id="avatar-file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif" hidden />
+        </div>
+      </div>
+      <div class="avatar-footer">
+        <button class="btn btn-danger" id="avatar-revert">Revert to initial</button>
+        <div class="avatar-footer-right">
+          <button class="btn" id="avatar-cancel">Cancel</button>
+          <button class="btn btn-primary" id="avatar-save" disabled>Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal modal-context" id="modal-context" hidden>
+    <div class="modal-inner">
+      <div class="modal-header">
+        <h2 id="context-title">Specialist</h2>
+        <button class="iconbtn" id="context-close" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body" id="context-body"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Vendored markdown parser + sanitizer. Loaded BEFORE app.js so the
+     globals (marked, DOMPurify) are available when render_md() runs.
+     Both are MIT-licensed, served from disk (no CDN at runtime). -->
+<script src="/app/assets/marked.min.js"></script>
+<script src="/app/assets/dompurify.min.js"></script>
+<script type="module" src="/app/app.js"></script>
+
+<!-- Talk-to-Kate: shimmering warm-white orb → glassmorphic voice pane.
+     Self-contained (doesn't touch app.js); the pane embeds /app/voice.html so
+     there's one source of truth and the mic/session carry over. -->
+<!-- On the Fire — the in-flight work dock. Hidden entirely when nothing is
+     running or recently finished, so the resting UI is unchanged. Sits above
+     Kate's orb; app.js owns all of its state (fire_* functions). -->
+<div id="fire-dock" class="fire-dock" hidden>
+  <div id="fire-panel" class="fire-panel" hidden role="dialog" aria-labelledby="fire-panel-title">
+    <div class="fire-panel-head">
+      <span class="fire-panel-title" id="fire-panel-title">On the fire</span>
+      <span class="fire-head-actions">
+        <button class="fire-clear-all" type="button" id="fire-clear" hidden>Clear all</button>
+        <button class="fire-panel-x" type="button" id="fire-collapse" aria-label="Collapse">✕</button>
+      </span>
+    </div>
+    <!-- aria-live=polite: a job appearing or finishing is announced without
+         stealing focus. `role=log` because this is an accumulating list, and
+         polite (not assertive) because none of it is urgent. -->
+    <div class="fire-panel-body" id="fire-list" role="log" aria-live="polite" aria-relevant="additions text"></div>
+  </div>
+  <button class="fire-pill" type="button" id="fire-pill" aria-expanded="false">
+    <span class="fire-pill-flame" aria-hidden="true"></span>
+    <span class="fire-pill-label" id="fire-pill-label">Nothing on the fire</span>
+  </button>
+</div>
+<button id="kate-orb" class="kate-orb" type="button" aria-label="Talk to Kate" title="Talk to Kate"><span class="kate-orb-core"></span></button>
+<div id="voice-pane" class="voice-pane" hidden aria-hidden="true">
+  <div class="voice-pane-backdrop" data-close></div>
+  <div class="voice-pane-card">
+    <button class="voice-pane-x" type="button" data-close aria-label="Close">✕</button>
+    <iframe id="voice-frame" class="voice-frame" title="Talk to Kate" allow="microphone; autoplay" referrerpolicy="same-origin"></iframe>
+  </div>
+</div>
+<script>
+(() => {
+  const orb = document.getElementById('kate-orb');
+  const pane = document.getElementById('voice-pane');
+  const frame = document.getElementById('voice-frame');
+  if (!orb || !pane || !frame) return;
+  const open = () => {
+    frame.src = '/app/voice.html';
+    pane.hidden = false; pane.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(() => pane.classList.add('open'));
+  };
+  const close = () => {
+    pane.classList.remove('open');
+    setTimeout(() => { pane.hidden = true; pane.setAttribute('aria-hidden', 'true'); frame.src = 'about:blank'; }, 380);
+  };
+  orb.addEventListener('click', open);
+  pane.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', close));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !pane.hidden) close(); });
+  window.addEventListener('message', (e) => { if (e && e.data && e.data.type === 'kate-voice-close') close(); });
+})();
+</script>
+</body>
+</html>

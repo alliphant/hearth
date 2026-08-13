@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Kate — face</title>
+<!--
+  Kate's VRM face surface (three-vrm). Served by the orchestrator at
+  /app/face (mirrors the rides / scrum-canvas static-dir pattern); behind the
+  normal web-session auth. Loads ./kate.vrm, runs idle life (blink / breathe /
+  spring-bone physics), eased emotion blends, and amplitude lip-sync driven by
+  an AnalyserNode on the played audio. The "Speak" path posts to the top-level
+  /api/voice/tts proxy (Kate's real Laur voice on forza); Mic + Demo work with
+  no backend.
+
+  three.js + @pixiv/three-vrm are VENDORED under /app/face/vendor/ (three
+  r0.172.0 + @pixiv/three-vrm v3) so the surface works offline — important for
+  the ambient wall display. No bundler (the repo's vanilla-ES-module client);
+  the importmap resolves bare `three` for the addon files. Absolute /app/face
+  paths (the rides/scrum-canvas convention) so it's trailing-slash-proof.
+-->
+<script type="importmap">
+{
+  "imports": {
+    "three": "/app/face/vendor/three.module.js",
+    "three/addons/": "/app/face/vendor/addons/",
+    "@pixiv/three-vrm": "/app/face/vendor/three-vrm.module.min.js",
+    "@pixiv/three-vrm-animation": "/app/face/vendor/three-vrm-animation.module.min.js"
+  }
+}
+</script>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #14131a; color: #eae7f0;
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  #stage { position: fixed; inset: 0; }
+  #c { display: block; width: 100%; height: 100%; touch-action: none; }
+  #hud { position: fixed; top: 12px; left: 12px; padding: 8px 11px; border-radius: 10px;
+    background: rgba(0,0,0,.45); backdrop-filter: blur(8px); font-variant-numeric: tabular-nums;
+    font-size: 12px; line-height: 1.55; pointer-events: none; white-space: pre; color: #cfc9e0; }
+  #hud b { color: #fff; font-weight: 600; }
+  #bar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center;
+    max-width: min(880px, 94vw); padding: 10px 12px; border-radius: 14px;
+    background: rgba(20,19,26,.72); backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,.08); box-shadow: 0 8px 30px rgba(0,0,0,.4); }
+  #bar input[type=text] { flex: 1 1 220px; min-width: 160px; padding: 9px 12px; border-radius: 9px;
+    border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.05); color: #fff; font-size: 14px; }
+  #bar select { padding: 8px 9px; border-radius: 9px; border: 1px solid rgba(255,255,255,.14);
+    background: rgba(255,255,255,.05); color: #fff; font-size: 13px; }
+  button { padding: 9px 13px; border-radius: 9px; border: 1px solid rgba(255,255,255,.14);
+    background: rgba(255,255,255,.07); color: #eae7f0; font-size: 13px; cursor: pointer; }
+  button:hover { background: rgba(255,255,255,.13); }
+  button.on { background: #6d5cf6; border-color: #6d5cf6; color: #fff; }
+  .group { display: flex; gap: 6px; flex-wrap: wrap; }
+  .sep { width: 1px; align-self: stretch; background: rgba(255,255,255,.12); margin: 2px 2px; }
+  #emo button { padding: 7px 10px; font-size: 12px; }
+  #boot { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 10px; color: #b7b1c9; text-align: center; padding: 20px; }
+  .spin { width: 26px; height: 26px; border: 3px solid rgba(255,255,255,.18); border-top-color: #6d5cf6;
+    border-radius: 50%; animation: r 0.9s linear infinite; }
+  @keyframes r { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+  <div id="stage"><canvas id="c"></canvas></div>
+  <div id="hud">loading…</div>
+  <div id="boot"><div class="spin"></div><div>Loading Kate…</div></div>
+
+  <div id="bar">
+    <input id="say" type="text" placeholder="Type something for Kate to say…" autocomplete="off" />
+    <select id="voice" title="TTS voice">
+      <option value="EN_F_LaurFT">Laur (fine-tune)</option>
+      <option value="EN_F_Laur">Laur (base)</option>
+    </select>
+    <button id="speak">Speak</button>
+    <div class="sep"></div>
+    <button id="mic">🎤 Mic</button>
+    <button id="demo">Demo lips</button>
+    <button id="mirror" title="Speak Kate's replies as they arrive (ambient mode)">Mirror</button>
+    <div class="sep"></div>
+    <div class="group" id="emo">
+      <button data-emo="neutral" class="on">neutral</button>
+      <button data-emo="happy">happy</button>
+      <button data-emo="relaxed">relaxed</button>
+      <button data-emo="surprised">surprised</button>
+      <button data-emo="sad">sad</button>
+      <button data-emo="angry">angry</button>
+    </div>
+  </div>
+
+  <script type="module" src="/app/face/face.js"></script>
+</body>
+</html>

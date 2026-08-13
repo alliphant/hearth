@@ -1,0 +1,92 @@
+# config/market-themes.yaml — thematic ticker universes for Vivian's
+# speculative radar (the momentum_screen / list_market_themes tools).
+#
+# Hand-editable; the connector reads this file fresh on every call, so an
+# edit is live on the next tool invocation — no restart, no reload hook.
+# Tickers may appear in more than one theme. A delisted or renamed ticker
+# is harmless: the screen fetches each symbol independently and reports
+# failures in `skipped` rather than aborting the pass — prune them when
+# you notice.
+#
+# Format:
+#   themes:
+#     <snake_case_id>:
+#       label: <short display name>
+#       description: <one-liner Vivian reads when choosing a universe —
+#         honest notes about sector risk belong here>
+#       tickers: [SYM, SYM, ...]   # US-listed symbols, Yahoo Finance form
+
+themes:
+  ai_infrastructure:
+    label: AI infrastructure & semis
+    description: >-
+      The compute layer — GPUs, custom silicon, foundry, memory,
+      networking, and the servers they ship in. The most crowded
+      momentum theme in the market; moves are large in both directions.
+    tickers: [NVDA, AMD, AVGO, TSM, MU, MRVL, ARM, SMCI, ANET, ALAB, CRDO, VRT]
+
+  ai_software:
+    label: AI software & platforms
+    description: >-
+      Model builders, data/AI platforms, and the small-cap "AI story"
+      names. The small caps here (SOUN, BBAI) trade on narrative more
+      than revenue — momentum is real but fragile.
+    tickers: [MSFT, GOOGL, META, PLTR, NOW, SNOW, DDOG, AI, SOUN, BBAI, PATH, TEM]
+
+  datacenters:
+    label: Datacenters & buildout
+    description: >-
+      The physical buildout — datacenter REITs, electrical equipment,
+      cooling, engineering/construction, and the server OEMs. The
+      picks-and-shovels lane of the AI capex cycle.
+    tickers: [DLR, EQIX, VRT, ETN, PWR, GEV, MOD, BE, DELL, HPE, CIEN, FIX]
+
+  power_nuclear:
+    label: Power & nuclear
+    description: >-
+      Generation capacity for the datacenter load — merchant power,
+      nuclear restarts, SMR developers, and the uranium fuel chain.
+      SMR developers (OKLO, SMR, NNE) are pre-revenue; treat as venture
+      bets with tickers.
+    tickers: [CEG, VST, TLN, NRG, OKLO, SMR, NNE, LEU, CCJ, BWXT, UEC]
+
+  vertical_farming_agtech:
+    label: Vertical farming & agtech
+    description: >-
+      Controlled-environment agriculture and the broader ag-technology
+      complex. Honest note — pure-play vertical farming is a
+      high-mortality sector (AppHarvest, AeroFarms, and Kalera all went
+      bankrupt); the survivors are thinly traded, so the list blends
+      CEA pure plays with established ag-science and irrigation names.
+    tickers: [HYFM, GRWG, VFF, LOCL, SMG, CTVA, DE, AGCO, LNN, VMI]
+
+  space:
+    label: Space & launch
+    description: >-
+      Launch, satellite constellations, and space infrastructure.
+      Retail-momentum heavy; several names routinely top the trending
+      feed, which cuts both ways.
+    tickers: [RKLB, ASTS, LUNR, RDW, PL, BKSY, SPCE]
+
+  robotics_automation:
+    label: Robotics & automation
+    description: >-
+      Industrial and surgical robotics, machine vision, warehouse
+      automation, and the newer autonomy small caps.
+    tickers: [ISRG, TER, ROK, SYM, CGNX, ZBRA, OUST, SERV]
+
+  quantum:
+    label: Quantum computing
+    description: >-
+      Pure-play quantum names. Tiny floats, extreme volatility,
+      pre-commercial revenue — the most speculative theme on this
+      list by a distance.
+    tickers: [IONQ, RGTI, QBTS, QUBT, ARQQ]
+
+  defense_tech:
+    label: Defense tech & autonomy
+    description: >-
+      Drones, counter-drone, and software-defined defense — the
+      faster-moving end of the defense complex rather than the big
+      primes.
+    tickers: [KTOS, AVAV, RCAT, LHX, LDOS, DRS]

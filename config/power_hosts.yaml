@@ -1,0 +1,51 @@
+# Household hosts Kate may power on / put to sleep on the owner's request
+# (2026-07-28). Read by src/specialists/kate/tools/host_power.ts.
+#
+# THIS FILE IS THE ALLOWLIST. A machine that is not listed here cannot be woken
+# or slept through Kate, no matter how she is asked — there is no "any host"
+# path in the tool. Adding a machine is a deliberate edit here.
+#
+# Waking uses the existing host-network WoL relay (ops/wol-relay/relay.ts) that
+# browse_url already depends on; sleeping goes through the target's own agentd
+# `POST /suspend`, which refuses on an always-on host and refuses mid-session.
+# Both guards live on the target, so they cannot be bypassed from this side.
+#
+# DO NOT ADD the LLM host. It is the always-on stack (Hearth x3, Home Assistant,
+# nginx, the *arr apps, the LLM tier) and has no agentd; sleeping it takes the
+# entire household down, including Kate herself.
+#
+# DO NOT MARK MINT SLEEPABLE. It runs the FRIDAY kiosk, Firecrawl, Home
+# Assistant, searxng and the browser host. It is listed below only so Kate can
+# answer "is the always-on host up?" honestly and so a mistaken sleep request gets a real
+# explanation instead of a shrug. Its agentd also runs AGENTD_ALWAYS_ON=1, so
+# the refusal is enforced on the box regardless of what this file says — the
+# `sleepable: false` here is the readable half of a guard that is already
+# structural.
+
+hosts:
+  avalanche:
+    label: the workstation — dev workstation, last-resort browser host
+    # WoL target: the copper NIC, which stays powered through S3 suspend. The
+    # 10 GbE NIC cannot wake the box reliably and re-associates slowly, which
+    # is why health and session traffic are split across the two.
+    mac: "02:00:00:00:00:ec"
+    health_host: "192.168.0.83"
+    session_host: "192.168.0.11"
+    agentd_port: 4446
+    wakeable: true
+    sleepable: true
+    notes: >-
+      Discrete-GPU workstation. Waking it costs real power and dumps heat into a
+      house that clears it slowly, so it sleeps by default and is woken only on
+      purpose. Its browser role is a last resort behind the always-on host.
+
+  mint:
+    label: the always-on host — always-on household host (FRIDAY kiosk, Firecrawl, HA, browser host)
+    health_host: "your-always-on-host.your-tailnet.ts.net"
+    session_host: "your-always-on-host.your-tailnet.ts.net"
+    agentd_port: 4446
+    wakeable: false
+    sleepable: false
+    notes: >-
+      Never sleeps. Suspending it would take the kiosk, Firecrawl, Home
+      Assistant and every browse session down with it.

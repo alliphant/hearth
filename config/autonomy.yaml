@@ -1,0 +1,85 @@
+# Autonomy graduation config — drives the Tier 2a → 2b → 2c → 3 framework
+# in src/core/proposals.ts. Hot-reloaded at runtime via chokidar
+# (watch_autonomy_config), alongside policies/v0.yaml — a hand edit here is
+# live on the next graduation check, no orchestrator restart.
+#
+# See architecture.md "Tiered autonomy" for the design.
+
+# Dollar cap, in cents. Signatures whose extras.amount_cents exceeds this
+# value never graduate, regardless of approval count.
+amount_cap_cents: 20000
+
+min_approvals_for_tier2b: 5
+min_approvals_for_tier2c: 10
+min_approvals_for_tier3: 20
+
+# Authenticity gate (Pass C, 2026-05-25). A signature's owning
+# specialist must hold an authenticity score (0-100, from Mariah's
+# daily scan_specialist_authenticity) at or above these thresholds
+# to earn graduation to the named tier. Approvals still accumulate
+# below the threshold — the candidate is held, not lost. New hires
+# with no scan history yet pass through (graduation depends only on
+# approvals) so a brand-new specialist isn't permanently blocked
+# before Mariah's first scan runs.
+#
+# Path back up: Beatrice ships persona/tool/config fixes from the
+# scan findings via the process_misses closed loop; the score
+# recovers on the next scan; held graduations become candidates
+# again on the next graduation check.
+min_authenticity_score_for_tier2b: 70
+min_authenticity_score_for_tier2c: 85
+min_authenticity_score_for_tier3: 90
+
+# Eval-health gate (2026-06-14). When true, a signature does NOT graduate
+# while its owning specialist has a STANDING behavioral regression — i.e. the
+# most recent run, within eval_health_window_days, of any golden eval task
+# owned by that specialist FAILED (src/core/evals + the eval_runs table). A
+# specialist fabricating/denying in the regression suite shouldn't earn more
+# autonomy until the behavior is fixed and the eval goes green again.
+#
+# Fail-OPEN, mirroring the authenticity floor's new-hire pass-through: a
+# specialist with NO eval runs in the window is "unknown" and passes the gate
+# — a brand-new specialist isn't blocked before the first nightly run scores
+# it. Path back up: the pass→fail transition already files an eval:<task_id>
+# process_miss; Beatrice ships the fix; the next nightly run flips it green;
+# the gate opens. Set false to disable the gate entirely.
+require_eval_health_for_graduation: true
+eval_health_window_days: 14
+
+# Specific signature hashes that should never graduate (hand-edited).
+excluded_signatures: []
+
+# Web actions (Browser Use, Prompt 9) don't graduate unless this is true.
+web_action_graduation_enabled: false
+
+# Categories that are never auto-approvable, even after graduation.
+hard_excluded_categories:
+  - legal
+  - medical_prescription
+  - first_time_contact
+  - sensitive_recipient
+
+# Trust Ladder — the RPG XP/level layer over graduation (2026-06-20).
+# ENGAGES ONLY when HEARTH_TRUST_XP=1 (dark by default). When on, each decided
+# proposal accrues XP on its signature (accept = +, edited-accept = partial,
+# deny = −, weighted by the action's risk class) and a signature must hold the
+# XP threshold for its tier — ANDed with the approval-count gate — to graduate.
+# Kate EARNS the level, she doesn't just collect approvals; the draft→tap→PIN
+# floor is unchanged. This is a complete block (shallow-merged like
+# hard_excluded_categories) — edit it whole. Engine defaults: src/core/trust_xp.ts.
+trust_xp:
+  # Base XP per accepted action, by the action's risk class.
+  base_xp_by_risk:
+    low: 1      # a draft / informational proposal
+    medium: 3   # an externally-effecting dispatch (no money)
+    high: 8     # money or a PIN-step-up-gated action
+  # Decision effect multiplier.
+  effect_multiplier:
+    approve: 1.0           # clean accept — full XP
+    approve_modified: 0.4  # accepted after an edit — Kate's draft needed work
+    deny: -1.0             # denied — trust lost (XP clamped at 0)
+  # XP a signature must hold to be ELIGIBLE to graduate FROM each tier.
+  level_xp_thresholds:
+    tier2a: 8
+    tier2b: 30
+    tier2c: 80

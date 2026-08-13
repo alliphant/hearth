@@ -1,0 +1,969 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP Z Workstations — Local vs Cloud LLM ROI calculator</title>
+<style>
+/* Z by HP-inspired skin: gunmetal blacks, HP blue, angular cuts. */
+:root {
+  --bg: #0b0d10; --panel: #14171b; --panel-2: #1b1f24; --border: #2b3138;
+  --text: #e9edf1; --muted: #9aa6b2; --accent: #0096d6;
+  --good: #4fc38a; --bad: #e0626c; --warn: #e0a95c;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f4f6f8; --panel: #ffffff; --panel-2: #eef1f4; --border: #d7dde3;
+    --text: #1a1f26; --muted: #5b6673; --accent: #0278ab;
+    --good: #15803d; --bad: #b91c1c; --warn: #b45309;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.topbar { height: 4px; background: linear-gradient(90deg, #0096d6, #00b4ff 30%, rgba(0, 150, 214, .18) 72%, transparent); }
+header { padding: 24px 24px 8px; max-width: 1080px; margin: 0 auto; }
+.brand { display: flex; gap: 16px; align-items: center; }
+.zmark { width: 46px; height: 46px; flex: 0 0 auto; filter: drop-shadow(0 2px 12px rgba(0, 150, 214, .4)); }
+.brand-line { font-size: 11px; letter-spacing: .3em; color: var(--muted); font-weight: 600; margin-bottom: 3px; }
+.brand-line b { color: var(--accent); font-weight: 800; }
+h1 { margin: 0 0 4px; font-size: 22px; }
+.sub { margin: 0; color: var(--muted); }
+.foot { grid-column: 1 / -1; text-align: center; color: var(--muted); font-size: 11.5px; letter-spacing: .04em; margin: 6px 0 0; }
+main { max-width: 1080px; margin: 0 auto; padding: 16px 24px 64px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+/* sprinkle №12a — cards lift gently under the pointer */
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; transition: transform .18s ease, box-shadow .18s ease; }
+.card:hover { transform: translateY(-1px); box-shadow: 0 10px 30px rgba(0, 0, 0, .22); }
+.card.wide { grid-column: 1 / -1; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+h2 { margin: 0 0 12px; font-size: 15px; color: var(--accent); font-weight: 600; }
+/* angular Z-style chips on section headings + a slash on each card corner */
+h2::before { content: ''; display: inline-block; width: 9px; height: 11px; background: var(--accent); transform: skewX(-18deg); margin-right: 9px; border-radius: 1px; }
+.card { position: relative; }
+.card::before { content: ''; position: absolute; top: 0; right: 16px; width: 30px; height: 3px; background: var(--accent); transform: skewX(-32deg); opacity: .5; }
+.row { display: flex; flex-wrap: wrap; gap: 10px 14px; margin-bottom: 10px; align-items: flex-end; }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); flex: 1 1 130px; min-width: 0; }
+label.check { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; color: var(--text); flex: 1 1 100%; }
+.lbl { display: inline-flex; align-items: center; gap: 5px; }
+input, select { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 7px 9px; font: inherit; width: 100%; transition: border-color .15s ease, box-shadow .15s ease; }
+/* sprinkle №12b — inputs glow on focus */
+input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+input[type=checkbox], input[type=radio] { width: auto; margin: 0; }
+input[type=range] { background: transparent; border: none; padding: 0; accent-color: var(--accent); height: 28px; }
+input[type=range]:focus { box-shadow: none; }
+button { background: var(--accent); border: none; color: #fff; border-radius: 8px; padding: 8px 14px; font: inherit; font-weight: 600; cursor: pointer; flex: 0 0 auto; }
+button.ghost { background: transparent; border: 1px solid var(--border); color: var(--accent); }
+button:disabled { opacity: .6; cursor: wait; }
+/* sprinkle №11 — benchmark button shimmers while a run is in flight */
+button.benching {
+  background: linear-gradient(110deg, var(--accent) 38%, color-mix(in srgb, var(--accent) 55%, white) 50%, var(--accent) 62%);
+  background-size: 220% 100%;
+  animation: shimmer 1.1s linear infinite;
+}
+@keyframes shimmer { from { background-position: 130% 0; } to { background-position: -70% 0; } }
+.status { color: var(--muted); font-size: 13px; flex: 1 1 200px; }
+.hint { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.chip { background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px; font-size: 13px; }
+.chip b { font-weight: 600; }
+.chip.good { border-color: var(--good); color: var(--good); }
+.chip.warn { border-color: var(--warn); color: var(--warn); }
+.chip.bad { border-color: var(--bad); color: var(--bad); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--muted); font-weight: 500; font-size: 12px; }
+.pos { color: var(--good); }
+.neg { color: var(--bad); }
+.helper { color: var(--muted); font-size: 13px; align-items: flex-end; }
+
+/* sprinkle №8 — table rows wade in one after another on first render */
+@keyframes row-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+#roi-body tr { animation: row-in .38s ease backwards; }
+/* sprinkle №7 — savings bars, drawn to scale, morph as values change */
+td.barcell { width: 16%; min-width: 76px; }
+.bar { height: 6px; border-radius: 3px; width: 0; min-width: 2px; margin-left: auto; transition: width .6s cubic-bezier(.22, .9, .35, 1), background .3s; }
+.bar.pos { background: linear-gradient(90deg, color-mix(in srgb, var(--good) 45%, transparent), var(--good)); }
+.bar.neg { background: linear-gradient(90deg, color-mix(in srgb, var(--bad) 45%, transparent), var(--bad)); }
+/* sprinkle №9 — values do a tiny bump when they change */
+.cell, .cnum { display: inline-block; }
+.bump { animation: bump .38s ease; }
+@keyframes bump { 0% { transform: scale(1); } 35% { transform: scale(1.08); } 100% { transform: scale(1); } }
+
+/* chart furniture */
+.legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); margin: 2px 0 4px; }
+.legend i { display: inline-block; width: 18px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: 3px; }
+#chart-wrap { position: relative; margin: 2px 0 16px; }
+#cost-chart { width: 100%; height: auto; display: block; }
+.chart-tip { position: absolute; pointer-events: none; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px; font-size: 12px; opacity: 0; transition: opacity .12s; white-space: nowrap; z-index: 5; box-shadow: 0 6px 18px rgba(0, 0, 0, .3); }
+/* sprinkle №3 — the break-even beacon pulses where the curves cross */
+#be-pulse { transform-box: fill-box; transform-origin: center; animation: bepulse 1.9s ease-out infinite; }
+@keyframes bepulse { 0% { transform: scale(.55); opacity: .85; } 70% { transform: scale(2.4); opacity: 0; } 100% { transform: scale(2.4); opacity: 0; } }
+/* gauge inside the utilization chip */
+.gauge { vertical-align: -2.5px; margin-right: 5px; }
+/* sprinkle №10 — break-even-improved burst particles */
+.spark { position: fixed; width: 7px; height: 7px; border-radius: 50%; pointer-events: none; z-index: 99; opacity: .95; transition: transform .7s cubic-bezier(.16, .8, .3, 1), opacity .7s ease; }
+
+/* sprinkle №14 — every animation collapses gracefully for reduced-motion users */
+@media (prefers-reduced-motion: reduce) {
+  .card, input, .bar, .chart-tip { transition: none; }
+  #roi-body tr, .bump, #be-pulse, button.benching { animation: none; }
+}
+
+/* tooltips: hover, tap/click, or keyboard focus */
+.tip {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 15px; height: 15px; border-radius: 50%;
+  border: 1px solid var(--border); color: var(--muted);
+  font-size: 10px; font-weight: 600; font-style: normal;
+  cursor: help; position: relative; user-select: none; flex: 0 0 auto;
+}
+.tip:hover, .tip.open, .tip:focus-visible { color: var(--accent); border-color: var(--accent); }
+.tip::after {
+  content: attr(data-tip);
+  position: absolute; left: 50%; bottom: calc(100% + 9px);
+  transform: translateX(calc(-50% + var(--tip-shift, 0px)));
+  width: var(--tip-w, 250px); max-width: 78vw;
+  background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 10px; font-size: 12px; font-weight: 400; line-height: 1.45;
+  text-align: left; white-space: normal;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .35);
+  opacity: 0; pointer-events: none; transition: opacity .12s; z-index: 20;
+}
+.tip::before {
+  content: ''; position: absolute; left: 50%; bottom: calc(100% + 3px);
+  transform: translateX(-50%); border: 6px solid transparent;
+  border-top-color: var(--border);
+  opacity: 0; transition: opacity .12s; z-index: 20;
+}
+.tip:hover::after, .tip:hover::before,
+.tip.open::after, .tip.open::before,
+.tip:focus-visible::after, .tip:focus-visible::before { opacity: 1; }
+th .tip { vertical-align: -3px; margin-left: 3px; }
+.chip .tip { vertical-align: -2px; margin-left: 6px; }
+</style>
+</head>
+<body>
+<div class="topbar"></div>
+<header>
+  <div class="brand">
+    <svg class="zmark" viewBox="0 0 48 48" aria-hidden="true">
+      <defs>
+        <linearGradient id="zblue" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#00b4ff"/>
+          <stop offset="1" stop-color="#0096d6"/>
+        </linearGradient>
+      </defs>
+      <path d="M3 6 H45 V14 L20 34 H45 V42 H3 V34 L28 14 H3 Z" fill="url(#zblue)"/>
+    </svg>
+    <div>
+      <div class="brand-line">HP <b>Z</b> WORKSTATIONS</div>
+      <h1>Local vs Cloud LLM — ROI calculator</h1>
+      <p class="sub">Bench a local model, price it against a cloud API, and watch the workstation pay for itself.</p>
+    </div>
+  </div>
+</header>
+<main>
+  <section class="card">
+    <h2>1 · Measure local throughput</h2>
+    <div class="row">
+      <label><span class="lbl">Endpoint (OpenAI-compat base)<i class="tip" tabindex="0" data-tip="The OpenAI-compatible server to benchmark. llama.cpp, vLLM and Ollama all expose one — e.g. http://your-llm-host.local:8088/v1, or http://host:11434/v1 for Ollama. The /v1 is added for you if you leave it off.">?</i></span>
+        <input id="base_url" placeholder="http://your-llm-host.local:8088/v1">
+      </label>
+      <label><span class="lbl">API key (optional)<i class="tip" tabindex="0" data-tip="Bearer token, only if the endpoint requires auth. Local llama.cpp / vLLM / Ollama usually need none — leave empty.">?</i></span>
+        <input id="api_key" placeholder="">
+      </label>
+    </div>
+    <div class="row">
+      <label><span class="lbl">Model<i class="tip" tabindex="0" data-tip="The model id as the endpoint knows it — hit List models to discover what it serves. On Ollama, any pulled model loads into VRAM on demand when the bench starts (first run can take minutes).">?</i></span>
+        <input id="model" list="model-list" placeholder="qwen36-35b-a3b">
+      </label>
+      <button id="btn-models" class="ghost" type="button">List models</button>
+    </div>
+    <datalist id="model-list"></datalist>
+    <div class="row">
+      <label><span class="lbl">Prompt tokens<i class="tip" tabindex="0" data-tip="Size of the test prompt, in tokens (2048 ≈ a few pages of text). Bigger prompts give a steadier prefill reading; the exact count the server saw is reported back.">?</i></span>
+        <input id="prompt_tokens" type="number" min="64" value="2048">
+      </label>
+      <label><span class="lbl">Output tokens<i class="tip" tabindex="0" data-tip="How much text the model generates for the test. More tokens = a steadier generation reading, but a longer bench.">?</i></span>
+        <input id="max_output_tokens" type="number" min="16" value="256">
+      </label>
+      <label class="check"><input id="unload_after" type="checkbox"> Unload model afterwards (Ollama only)<i class="tip" tabindex="0" data-tip="Ollama only: evicts the model from VRAM when the bench finishes (keep_alive: 0), so a big test model does not squat on the GPU. llama.cpp and vLLM hold their model until the server stops.">?</i></label>
+    </div>
+    <div class="row">
+      <button id="btn-bench" type="button">Run benchmark</button>
+      <span id="bench-status" class="status"></span>
+    </div>
+    <div class="row">
+      <label><span class="lbl">Prefill tok/s<i class="tip" tabindex="0" data-tip="Prompt-processing speed: how many INPUT tokens the model ingests per second before the first output token appears. Measured as prompt tokens ÷ time-to-first-token. This is what makes big contexts feel fast or slow.">?</i></span>
+        <input id="prefill_tps" type="number" step="any" min="0" placeholder="measure or type">
+      </label>
+      <label><span class="lbl">Generation tok/s<i class="tip" tabindex="0" data-tip="Decode speed: OUTPUT tokens per second while the answer streams. Usually 10–100× slower than prefill, so it dominates the cost of long replies.">?</i></span>
+        <input id="gen_tps" type="number" step="any" min="0" placeholder="measure or type">
+      </label>
+    </div>
+    <p class="hint">Works with llama.cpp, vLLM and Ollama (use <code>http://host:11434/v1</code>). On Ollama the model
+    loads on demand — the first run can take minutes — and unloads after ~5 min idle, so this is how you
+    “temporarily try” a model. You can also type tok/s by hand and skip the bench entirely.</p>
+  </section>
+
+  <section class="card">
+    <h2>2 · Local hardware &amp; power</h2>
+    <div class="row">
+      <label><span class="lbl">GPU preset<i class="tip" tabindex="0" data-tip="Fills the cost and wattage fields below with editable ballparks. Pick Custom… to enter everything yourself — every number stays overridable.">?</i></span>
+        <select id="gpu_preset"><option value="">Custom…</option></select>
+      </label>
+      <label><span class="lbl">GPU / box cost $<i class="tip" tabindex="0" data-tip="What the GPU costs YOU — used and refurb prices count. For unified-memory machines (DGX Spark, Mac Studio) this is the whole box.">?</i></span>
+        <input id="gpu_cost" type="number" min="0" value="1700">
+      </label>
+      <label><span class="lbl">Rest of system $<i class="tip" tabindex="0" data-tip="CPU, motherboard, RAM, PSU, case, disk. Set 0 if you already own the host machine or the preset is a complete box.">?</i></span>
+        <input id="system_cost" type="number" min="0" value="600">
+      </label>
+    </div>
+    <div class="row">
+      <label><span class="lbl">Load watts (whole system)<i class="tip" tabindex="0" data-tip="Whole-system draw at the wall while inferring, in watts — GPU plus host overhead. A smart-plug or kill-a-watt reading beats any preset.">?</i></span>
+        <input id="load_w" type="number" min="0" value="430">
+      </label>
+      <label><span class="lbl">Idle watts<i class="tip" tabindex="0" data-tip="Whole-system draw when the box is on but not inferring. Only billed in dedicated 24/7 mode.">?</i></span>
+        <input id="idle_w" type="number" min="0" value="50">
+      </label>
+      <label><span class="lbl">Electricity $/kWh<i class="tip" tabindex="0" data-tip="Your price per kilowatt-hour, from the utility bill. Use the marginal (per-unit) rate, not the bill total divided by usage if you have fixed fees.">?</i></span>
+        <input id="kwh_rate" type="number" step="any" min="0" value="0.14">
+      </label>
+    </div>
+    <div class="row">
+      <label class="check"><input type="radio" name="duty" id="duty_shared" checked> Shared box — bill only the energy inference burns<i class="tip" tabindex="0" data-tip="This machine would be powered on anyway (desktop, NAS, homelab box) — so only the EXTRA energy that inference burns is charged to the local side.">?</i></label>
+      <label class="check"><input type="radio" name="duty" id="duty_dedicated"> Dedicated box — bill idle power 24/7 too<i class="tip" tabindex="0" data-tip="This box exists for inference — all 730 hours a month are charged to it, idle watts included. The honest mode for a standalone AI server.">?</i></label>
+    </div>
+    <div class="row">
+      <label><span class="lbl">Other monthly $ (parts fund, UPS, …)<i class="tip" tabindex="0" data-tip="Recurring extras that exist because of this box: a repair/parts fund, UPS battery wear, hosting or colo fees.">?</i></span>
+        <input id="misc_monthly" type="number" step="any" min="0" value="0">
+      </label>
+    </div>
+    <p class="hint">Presets fill price and wattage with editable ballparks. For unified-memory boxes
+    (DGX Spark, Mac Studio) the preset is the whole system — set “rest of system” to 0.</p>
+  </section>
+
+  <section class="card">
+    <h2>3 · Workload</h2>
+    <div class="row">
+      <label><span class="lbl">Input Mtok/month<i class="tip" tabindex="0" data-tip="Mtok = one MILLION tokens (a token ≈ ¾ of an English word). This is all the INPUT/prompt text your workload sends per month — system prompts, chat history, RAG context and documents all count, every request.">?</i></span>
+        <input id="prompt_mtok" type="number" step="any" min="0" value="30">
+      </label>
+      <label><span class="lbl">Output Mtok/month<i class="tip" tabindex="0" data-tip="Million OUTPUT tokens per month — the text the model generates. Usually far less volume than input, but clouds price it several times higher per token.">?</i></span>
+        <input id="output_mtok" type="number" step="any" min="0" value="6">
+      </label>
+    </div>
+    <div class="row helper">
+      <span class="lbl">or estimate:<i class="tip" tabindex="0" data-tip="Rough it out per request instead: requests/day × tokens per request → the button fills the two Mtok fields for you (using a 730-hour month).">?</i></span>
+      <label><span class="lbl">requests/day</span>
+        <input id="req_day" type="number" min="0" value="200">
+      </label>
+      <label><span class="lbl">in tok/req<i class="tip" tabindex="0" data-tip="Average prompt size per request, in tokens — include the system prompt, history and any retrieved context, not just the user message.">?</i></span>
+        <input id="in_per_req" type="number" min="0" value="1500">
+      </label>
+      <label><span class="lbl">out tok/req<i class="tip" tabindex="0" data-tip="Average reply length per request, in tokens. ~75 tokens per 100 English words.">?</i></span>
+        <input id="out_per_req" type="number" min="0" value="400">
+      </label>
+      <button id="btn-apply-reqs" class="ghost" type="button">→ fill Mtok</button>
+    </div>
+    <div class="row helper">
+      <span class="lbl">or size by capacity:<i class="tip" tabindex="0" data-tip="Works backwards from the box: drag to choose how busy the machine should be, and the two Mtok fields scale to the workload that busy-level could serve (keeping their current input:output ratio). Answers — what is this GPU worth to me if I keep it X% loaded? Syncs both ways: edit the Mtok fields and the slider follows.">?</i></span>
+      <input id="util_slider" type="range" min="1" max="95" step="1" value="5" style="flex: 2 1 180px">
+      <span id="util_readout" class="status" style="flex: 0 0 auto">—</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>4 · Cloud pricing</h2>
+    <div class="row">
+      <label><span class="lbl">Input $/Mtok<i class="tip" tabindex="0" data-tip="The cloud model’s list price per million INPUT tokens, straight from the provider’s pricing page.">?</i></span>
+        <input id="cloud_in" type="number" step="any" min="0" value="3.00">
+      </label>
+      <label><span class="lbl">Output $/Mtok<i class="tip" tabindex="0" data-tip="Price per million OUTPUT (generated) tokens — typically several times the input price on the same model.">?</i></span>
+        <input id="cloud_out" type="number" step="any" min="0" value="15.00">
+      </label>
+      <label><span class="lbl">Subscription $/month<i class="tip" tabindex="0" data-tip="Flat-rate plans — Claude Max, ChatGPT Plus/Pro, Copilot. Added on top of the per-token rates; set those to 0 if the plan covers your whole usage. Caveat: subscriptions cap usage — if your workload exceeds the plan’s real limits, this flatters the cloud side.">?</i></span>
+        <input id="cloud_sub" type="number" step="any" min="0" value="0">
+      </label>
+    </div>
+    <p class="hint">Per-token API rates, a flat subscription, or both — the monthly cloud bill is their sum.
+    Prompt caching and batch discounts aren’t modeled — use an effective blended rate if you rely on them.</p>
+  </section>
+
+  <section class="card wide">
+    <h2>Results</h2>
+    <div id="summary" class="chips"></div>
+    <div class="legend" id="legend" style="display:none">
+      <span><i style="background: var(--accent)"></i>Local — the Z workstation (hardware + running costs)</span>
+      <span><i style="background: var(--warn)"></i>Cloud — pay as you go</span>
+    </div>
+    <div id="chart-wrap" style="display:none">
+      <svg id="cost-chart" viewBox="0 0 720 260" preserveAspectRatio="xMidYMid meet" role="img"
+           aria-label="Cumulative cost over 48 months: local versus cloud, with break-even marked">
+        <defs>
+          <!-- sprinkle №2 — the Riverside current: a slow flow through the savings water -->
+          <linearGradient id="river" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="240" y2="0" spreadMethod="repeat">
+            <stop offset="0" style="stop-color: var(--good)" stop-opacity="0.08"/>
+            <stop offset="0.5" style="stop-color: var(--good)" stop-opacity="0.30"/>
+            <stop offset="1" style="stop-color: var(--good)" stop-opacity="0.08"/>
+            <animateTransform id="river-flow" attributeName="gradientTransform" type="translate"
+                              from="0 0" to="240 0" dur="7s" repeatCount="indefinite"/>
+          </linearGradient>
+        </defs>
+        <g id="ygrid"></g>
+        <g id="xlabels"></g>
+        <path id="savings-area" style="fill: url(#river)"/>
+        <path id="line-local" style="stroke: var(--accent); stroke-width: 2.5; fill: none; stroke-linecap: round"/>
+        <path id="line-cloud" style="stroke: var(--warn); stroke-width: 2.5; fill: none; stroke-linecap: round"/>
+        <line id="crosshair" y1="14" y2="230" style="stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0"/>
+        <g id="be-marker" style="opacity: 0; transition: opacity .3s">
+          <circle id="be-pulse" r="6" style="fill: var(--good)"/>
+          <circle r="3.5" style="fill: var(--good); stroke: var(--bg); stroke-width: 1.5"/>
+          <text id="be-label" x="10" y="-9" style="fill: var(--good); font-size: 12px; font-weight: 600"></text>
+        </g>
+      </svg>
+      <div class="chart-tip" id="chart-tip"></div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Horizon</th>
+          <th>Local total<i class="tip" tabindex="0" data-tip="Hardware cost + monthly local opex (energy + extras) × months.">?</i></th>
+          <th>Cloud total<i class="tip" tabindex="0" data-tip="The monthly cloud API bill × months, at the same workload.">?</i></th>
+          <th>Savings vs cloud<i class="tip" tabindex="0" data-tip="Cloud total − local total. Positive (green) means local has saved you that much by this horizon; negative means the hardware hasn’t paid for itself yet.">?</i></th>
+          <th>ROI on hardware<i class="tip" tabindex="0" data-tip="Net savings as a share of the hardware price. 0% = broke even exactly; 100% = the box has saved its own price over again.">?</i></th>
+          <th>Local $/Mtok (amortized)<i class="tip" tabindex="0" data-tip="Blended local cost per million tokens (input + output together), with the hardware spread over this row’s horizon. Compare against the blended cloud $/Mtok in the chips above.">?</i></th>
+          <th class="barhead"></th>
+        </tr>
+      </thead>
+      <tbody id="roi-body"></tbody>
+    </table>
+    <p class="hint">Math: GPU-busy time = input tokens ÷ prefill + output tokens ÷ generation, single-stream
+    (no batching credit, so capacity reads conservative). Dedicated mode bills idle watts for the rest of the
+    730&nbsp;h month. Local total = hardware + monthly opex × months; ROI = savings ÷ hardware cost.
+    “Local $/Mtok” amortizes hardware over that row’s horizon. Prefill tok/s ≈ prompt tokens ÷ time-to-first-token
+    (includes one decode step + LAN round-trip); generation comes from inter-token timing; llama.cpp’s exact
+    server timings are shown in the bench status when available.</p>
+  </section>
+  <p class="foot">Z by HP themed homelab build — runs on the LLM host, an workstation-class machine. Not affiliated with HP Inc.</p>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const STORE_KEY = 'hearth_roicalc_v1';
+const TEXT_FIELDS = ['base_url', 'api_key', 'model', 'prompt_tokens', 'max_output_tokens',
+  'prefill_tps', 'gen_tps', 'gpu_preset', 'gpu_cost', 'system_cost', 'load_w', 'idle_w',
+  'kwh_rate', 'misc_monthly', 'prompt_mtok', 'output_mtok', 'req_day', 'in_per_req',
+  'out_per_req', 'cloud_in', 'cloud_out', 'cloud_sub'];
+const CHECK_FIELDS = ['unload_after', 'duty_shared', 'duty_dedicated'];
+
+const num = (id) => { const v = parseFloat($(id).value); return Number.isFinite(v) ? v : 0; };
+const int = (id, dflt) => { const v = parseInt($(id).value, 10); return Number.isFinite(v) ? v : dflt; };
+const val = (id) => $(id).value.trim();
+const round1 = (x) => Math.round(x * 10) / 10;
+const fmt1 = (x) => x.toLocaleString(undefined, { maximumFractionDigits: 1 });
+const usd = (x) => (x < 0 ? '−$' : '$') +
+  Math.abs(x).toLocaleString(undefined, { maximumFractionDigits: Math.abs(x) >= 1000 ? 0 : 2 });
+const usd2 = (x) => '$' + x.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const usd_k = (x) => {
+  const a = Math.abs(x), s = x < 0 ? '−$' : '$';
+  return a >= 1000 ? s + (a / 1000).toLocaleString(undefined, { maximumFractionDigits: a >= 10000 ? 0 : 1 }) + 'k' : s + Math.round(a);
+};
+
+/* sprinkle №14 — one switch, every animation respects it */
+const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const ease_out = (t) => 1 - Math.pow(1 - t, 3);
+function tween(ms, on_frame, on_done) {
+  if (REDUCED || ms <= 0) { on_frame(1); if (on_done) on_done(); return () => {}; }
+  const t0 = performance.now();
+  let raf;
+  const step = (now) => {
+    const t = Math.min(1, (now - t0) / ms);
+    on_frame(ease_out(t));
+    if (t < 1) raf = requestAnimationFrame(step);
+    else if (on_done) on_done();
+  };
+  raf = requestAnimationFrame(step);
+  return () => cancelAnimationFrame(raf);
+}
+
+function save_state() {
+  const s = {};
+  for (const id of TEXT_FIELDS) s[id] = $(id).value;
+  for (const id of CHECK_FIELDS) s[id] = $(id).checked;
+  localStorage.setItem(STORE_KEY, JSON.stringify(s));
+}
+function load_state() {
+  let s;
+  try { s = JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch { s = {}; }
+  for (const id of TEXT_FIELDS) if (typeof s[id] === 'string' && s[id] !== '') $(id).value = s[id];
+  for (const id of CHECK_FIELDS) if (typeof s[id] === 'boolean') $(id).checked = s[id];
+}
+
+let presets = [];
+async function load_presets() {
+  try {
+    const res = await fetch('/api/presets');
+    presets = (await res.json()).presets || [];
+    const sel = $('gpu_preset');
+    const prev = sel.value;
+    for (const p of presets) {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = `${p.label} — ~$${p.price_usd}`;
+      sel.appendChild(opt);
+    }
+    sel.value = prev;
+  } catch { /* presets are convenience only */ }
+}
+function apply_preset() {
+  const p = presets.find((x) => x.id === $('gpu_preset').value);
+  if (!p) return;
+  $('gpu_cost').value = p.price_usd;
+  $('load_w').value = p.load_w;
+  $('idle_w').value = p.idle_w;
+  save_state();
+  schedule_recalc();
+}
+
+async function list_models() {
+  const base = val('base_url');
+  if (!base) { $('bench-status').textContent = 'enter an endpoint first'; return; }
+  $('bench-status').textContent = 'listing models…';
+  try {
+    const q = new URLSearchParams({ base_url: base });
+    if (val('api_key')) q.set('api_key', val('api_key'));
+    const res = await fetch('/api/models?' + q.toString());
+    const body = await res.json();
+    if (!res.ok) { $('bench-status').textContent = `✗ ${body.error || res.status}`; return; }
+    const list = $('model-list');
+    list.innerHTML = '';
+    for (const m of body.models) {
+      const opt = document.createElement('option');
+      opt.value = m;
+      list.appendChild(opt);
+    }
+    if (body.models.length === 1) $('model').value = body.models[0];
+    $('bench-status').textContent = `${body.models.length} model(s) — pick in the Model field`;
+  } catch (e) {
+    $('bench-status').textContent = `✗ ${e.message || e}`;
+  }
+}
+
+async function run_benchmark() {
+  const btn = $('btn-bench');
+  if (!val('base_url') || !val('model')) {
+    $('bench-status').textContent = 'enter endpoint + model first';
+    return;
+  }
+  btn.disabled = true;
+  btn.classList.add('benching');
+  const t0 = Date.now();
+  const tick = setInterval(() => {
+    $('bench-status').textContent =
+      `benchmarking… ${Math.round((Date.now() - t0) / 1000)}s (first run may include the model load)`;
+  }, 500);
+  try {
+    const payload = {
+      base_url: val('base_url'),
+      model: val('model'),
+      prompt_tokens: int('prompt_tokens', 2048),
+      max_output_tokens: int('max_output_tokens', 256),
+      unload_after: $('unload_after').checked,
+      timeout_ms: 600000,
+    };
+    if (val('api_key')) payload.api_key = val('api_key');
+    const res = await fetch('/api/bench', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const body = await res.json();
+    if (!res.ok || body.ok === false) {
+      $('bench-status').textContent = `✗ ${body.error || ('HTTP ' + res.status)}` +
+        (body.body_snippet ? ` — ${body.body_snippet}` : '');
+      return;
+    }
+    $('prefill_tps').value = round1(body.prefill_tps);
+    $('gen_tps').value = round1(body.gen_tps);
+    const st = body.server_timings;
+    $('bench-status').textContent =
+      `✓ prefill ${fmt1(body.prefill_tps)} tok/s · gen ${fmt1(body.gen_tps)} tok/s · ` +
+      `TTFT ${Math.round(body.ttft_ms)} ms · ${body.prompt_tokens} in / ${body.completion_tokens} out` +
+      (st ? ` · server-reported ${fmt1(st.prefill_tps)}${st.gen_tps ? ' / ' + fmt1(st.gen_tps) : ''} tok/s` : '') +
+      (body.notes.length ? ` · ${body.notes.join('; ')}` : '');
+    save_state();
+    recalc();
+  } catch (e) {
+    $('bench-status').textContent = `✗ ${e.message || e}`;
+  } finally {
+    clearInterval(tick);
+    btn.disabled = false;
+    btn.classList.remove('benching');
+  }
+}
+
+function apply_request_estimate() {
+  const days_per_month = 730 / 24;
+  $('prompt_mtok').value = (num('req_day') * num('in_per_req') * days_per_month / 1e6).toFixed(2);
+  $('output_mtok').value = (num('req_day') * num('out_per_req') * days_per_month / 1e6).toFixed(2);
+  save_state();
+  schedule_recalc();
+}
+
+// ── capacity slider: target utilization → workload (inverse of the calc) ────
+// busy = in/prefill + out/gen with out = ratio×in, so a target busy-time
+// solves to in = busy / (1/prefill + ratio/gen). The current in:out ratio is
+// preserved; the Mtok fields stay the single source of truth.
+let slider_dragging = false;
+function apply_utilization_target() {
+  slider_dragging = true; // keyboard arrows fire 'input' without pointerdown
+  const prefill = num('prefill_tps');
+  const gen = num('gen_tps');
+  if (!(prefill > 0) || !(gen > 0)) {
+    $('util_readout').textContent = 'measure throughput first';
+    return;
+  }
+  const target = parseFloat($('util_slider').value) / 100;
+  const in_m = num('prompt_mtok');
+  const out_m = num('output_mtok');
+  // Default to the 5:1 starting ratio when the fields are empty/zero.
+  const ratio = in_m > 0 ? out_m / in_m : out_m > 0 ? Infinity : 0.2;
+  const busy_s = target * 730 * 3600;
+  let in_tok, out_tok;
+  if (ratio === Infinity) {
+    in_tok = 0;
+    out_tok = busy_s * gen;
+  } else {
+    in_tok = busy_s / (1 / prefill + ratio / gen);
+    out_tok = in_tok * ratio;
+  }
+  $('prompt_mtok').value = (in_tok / 1e6).toFixed(2);
+  $('output_mtok').value = (out_tok / 1e6).toFixed(2);
+  $('util_readout').textContent = $('util_slider').value + '%';
+  save_state();
+  schedule_recalc();
+}
+
+/* sprinkle №5 — chip numbers count to their new values */
+const FMTS = { usd, usd2, fmt1, mo: (x) => String(Math.ceil(x)) };
+const prev_vals = {};
+function run_counters(scope) {
+  for (const el of scope.querySelectorAll('.cnum')) {
+    const key = el.dataset.key;
+    const target = parseFloat(el.dataset.val);
+    const f = FMTS[el.dataset.fmt] || String;
+    const from = key in prev_vals && Number.isFinite(prev_vals[key]) ? prev_vals[key] : target;
+    prev_vals[key] = target;
+    if (from === target) { el.textContent = f(target); continue; }
+    el.classList.add('bump');
+    tween(550, (t) => { el.textContent = f(from + (target - from) * t); },
+      () => el.classList.remove('bump'));
+  }
+}
+
+/* sprinkle №10 — break-even improved? fourteen lucky sprinkles, naturally */
+let prev_be = null;
+function maybe_sparks(be) {
+  const improved = !REDUCED && be != null && prev_be != null && be < prev_be - 0.5;
+  prev_be = be;
+  if (!improved) return;
+  const chip = [...document.querySelectorAll('#summary .chip')].find((c) => c.textContent.includes('Break-even'));
+  if (!chip) return;
+  const rect = chip.getBoundingClientRect();
+  const colors = ['var(--good)', 'var(--accent)', 'var(--warn)'];
+  for (let i = 0; i < 14; i++) {
+    const s = document.createElement('span');
+    s.className = 'spark';
+    s.style.background = colors[i % 3];
+    s.style.left = rect.left + rect.width / 2 + 'px';
+    s.style.top = rect.top + rect.height / 2 + 'px';
+    document.body.appendChild(s);
+    const ang = (i / 14) * Math.PI * 2 + Math.random() * 0.4;
+    const dist = 26 + Math.random() * 38;
+    requestAnimationFrame(() => {
+      s.style.transform = `translate(${Math.cos(ang) * dist}px, ${Math.sin(ang) * dist - 8}px) scale(.2)`;
+      s.style.opacity = '0';
+    });
+    setTimeout(() => s.remove(), 800);
+  }
+}
+
+// ── the cost-curve chart ─────────────────────────────────────────────────────
+// Both series are straight lines (local: hardware + opex·m; cloud: bill·m), so
+// the whole picture is defined by three scalars — which makes morphing cheap:
+// tween the scalars, redraw every frame.
+const CH = { W: 720, H: 260, PL: 58, PR: 16, PT: 14, PB: 30, M: 48 };
+let chart_now = null;
+let chart_meta = null;
+let chart_cancel = null;
+const ylabels = [];
+function init_chart() {
+  if (REDUCED) $('river-flow')?.remove();
+  const ygrid = $('ygrid');
+  const plot_h = CH.H - CH.PT - CH.PB;
+  for (const frac of [0, 0.25, 0.5, 0.75, 1]) {
+    const yy = CH.PT + plot_h * frac;
+    const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    ln.setAttribute('x1', CH.PL); ln.setAttribute('x2', CH.W - CH.PR);
+    ln.setAttribute('y1', yy); ln.setAttribute('y2', yy);
+    ln.style.cssText = 'stroke: var(--border); stroke-width: 1';
+    ygrid.appendChild(ln);
+    const tx = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    tx.setAttribute('x', CH.PL - 8); tx.setAttribute('y', yy + 4);
+    tx.setAttribute('text-anchor', 'end');
+    tx.style.cssText = 'fill: var(--muted); font-size: 11px';
+    ygrid.appendChild(tx);
+    ylabels.push({ frac, el: tx });
+  }
+  const xg = $('xlabels');
+  for (const m of [0, 12, 24, 36, 48]) {
+    const tx = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    tx.setAttribute('x', CH.PL + (CH.W - CH.PL - CH.PR) * (m / CH.M));
+    tx.setAttribute('y', CH.H - 10);
+    tx.setAttribute('text-anchor', 'middle');
+    tx.style.cssText = 'fill: var(--muted); font-size: 11px';
+    tx.textContent = m === 48 ? '48 mo' : String(m);
+    xg.appendChild(tx);
+  }
+  // sprinkle №4 — crosshair scrubber with live $ readout at any month
+  const wrap = $('chart-wrap');
+  wrap.addEventListener('pointermove', (e) => {
+    if (!chart_meta) return;
+    const rect = $('cost-chart').getBoundingClientRect();
+    const mx = ((e.clientX - rect.left) / rect.width) * CH.W;
+    const m = Math.round(Math.min(CH.M, Math.max(0, ((mx - CH.PL) / (CH.W - CH.PL - CH.PR)) * CH.M)));
+    const cx = chart_meta.x(m);
+    const ch = $('crosshair');
+    ch.setAttribute('x1', cx); ch.setAttribute('x2', cx);
+    ch.style.opacity = '1';
+    const lv = chart_meta.local(m), cv = chart_meta.cl(m);
+    const d = cv - lv;
+    const tip = $('chart-tip');
+    tip.innerHTML = `<b>month ${m}</b> · cloud ${usd_k(cv)} · local ${usd_k(lv)} · ` +
+      (d >= 0 ? `<span class="pos">local ahead ${usd_k(d)}</span>` : `<span class="neg">cloud ahead ${usd_k(-d)}</span>`);
+    const wr = wrap.getBoundingClientRect();
+    const px = e.clientX - wr.left;
+    tip.style.left = Math.min(wr.width - 250, Math.max(0, px + 14)) + 'px';
+    tip.style.top = Math.max(0, e.clientY - wr.top - 38) + 'px';
+    tip.style.opacity = '1';
+  });
+  wrap.addEventListener('pointerleave', () => {
+    $('crosshair').style.opacity = '0';
+    $('chart-tip').style.opacity = '0';
+  });
+}
+
+function draw_chart(vals) {
+  const { hw, opex, cloud } = vals;
+  const ymax = Math.max(hw + opex * CH.M, cloud * CH.M, 10) * 1.08;
+  const x = (m) => CH.PL + (CH.W - CH.PL - CH.PR) * (m / CH.M);
+  const y = (v) => CH.PT + (CH.H - CH.PT - CH.PB) * (1 - v / ymax);
+  const local = (m) => hw + opex * m;
+  const cl = (m) => cloud * m;
+  $('line-local').setAttribute('d', `M ${x(0)} ${y(local(0))} L ${x(CH.M)} ${y(local(CH.M))}`);
+  $('line-cloud').setAttribute('d', `M ${x(0)} ${y(0)} L ${x(CH.M)} ${y(cl(CH.M))}`);
+  const denom = cloud - opex;
+  const be = denom > 0 ? hw / denom : null;
+  const area = $('savings-area');
+  if (be !== null && be < CH.M) {
+    const b = Math.max(0, be);
+    area.setAttribute('d',
+      `M ${x(b)} ${y(cl(b))} L ${x(CH.M)} ${y(cl(CH.M))} L ${x(CH.M)} ${y(local(CH.M))} L ${x(b)} ${y(local(b))} Z`);
+    area.style.display = '';
+  } else {
+    area.style.display = 'none';
+  }
+  const mk = $('be-marker');
+  if (be !== null && be >= 0 && be <= CH.M) {
+    mk.setAttribute('transform', `translate(${x(be)} ${y(local(be))})`);
+    mk.style.opacity = '1';
+    const lbl = $('be-label');
+    lbl.textContent = `break-even · mo ${Math.ceil(be)}`;
+    const past = x(be) > CH.W * 0.66;
+    lbl.setAttribute('text-anchor', past ? 'end' : 'start');
+    lbl.setAttribute('x', past ? -10 : 10);
+  } else {
+    mk.style.opacity = '0';
+  }
+  for (const { frac, el } of ylabels) el.textContent = usd_k(ymax * (1 - frac));
+  chart_now = { hw, opex, cloud };
+  chart_meta = { x, y, local, cl };
+}
+
+/* sprinkle №13 — lines draw themselves in on the first render */
+function first_draw_anim() {
+  if (REDUCED) return;
+  for (const id of ['line-local', 'line-cloud']) {
+    const p = $(id);
+    const len = p.getTotalLength();
+    p.style.transition = 'none';
+    p.style.strokeDasharray = String(len);
+    p.style.strokeDashoffset = String(len);
+    requestAnimationFrame(() => {
+      p.style.transition = 'stroke-dashoffset .9s ease';
+      p.style.strokeDashoffset = '0';
+      setTimeout(() => { p.style.strokeDasharray = 'none'; p.style.transition = ''; }, 950);
+    });
+  }
+}
+
+/* sprinkle №1 — the chart morphs (not redraws) as the inputs change */
+function render_chart(target) {
+  $('legend').style.display = '';
+  $('chart-wrap').style.display = '';
+  if (!chart_now) {
+    draw_chart(target);
+    first_draw_anim();
+    return;
+  }
+  const from = { ...chart_now };
+  if (chart_cancel) chart_cancel();
+  chart_cancel = tween(550, (t) => {
+    draw_chart({
+      hw: from.hw + (target.hw - from.hw) * t,
+      opex: from.opex + (target.opex - from.opex) * t,
+      cloud: from.cloud + (target.cloud - from.cloud) * t,
+    });
+  });
+}
+
+/* sprinkles №6/7/8/9 live in the table: morph-in-place, scaled savings bars,
+   staggered first entrance, change bumps */
+function render_table(rows) {
+  const tbody = $('roi-body');
+  const maxabs = Math.max(1, ...rows.map((r) => Math.abs(r.savings_usd)));
+  const cell_texts = (row) => [
+    `${row.months} mo`,
+    usd(row.local_total_usd),
+    usd(row.cloud_total_usd),
+    usd(row.savings_usd),
+    row.roi_pct == null ? '—' : fmt1(row.roi_pct) + '%',
+    row.local_usd_per_mtok == null ? '—' : usd2(row.local_usd_per_mtok),
+  ];
+  const set_cell = (td, text, cls) => {
+    td.className = cls || '';
+    const span = td.firstElementChild;
+    if (span.textContent !== text) {
+      span.textContent = text;
+      if (!REDUCED) {
+        span.classList.remove('bump');
+        void span.offsetWidth; // restart the animation
+        span.classList.add('bump');
+      }
+    }
+  };
+  if (tbody.children.length === rows.length) {
+    rows.forEach((row, i) => {
+      const tds = tbody.children[i].children;
+      const texts = cell_texts(row);
+      set_cell(tds[0], texts[0]);
+      set_cell(tds[1], texts[1]);
+      set_cell(tds[2], texts[2]);
+      set_cell(tds[3], texts[3], row.savings_usd >= 0 ? 'pos' : 'neg');
+      set_cell(tds[4], texts[4], (row.roi_pct ?? 0) >= 0 ? 'pos' : 'neg');
+      set_cell(tds[5], texts[5]);
+      const bar = tds[6].firstElementChild;
+      bar.className = 'bar ' + (row.savings_usd >= 0 ? 'pos' : 'neg');
+      bar.style.width = (Math.abs(row.savings_usd) / maxabs) * 100 + '%';
+    });
+  } else {
+    tbody.innerHTML = rows.map((row, i) => {
+      const texts = cell_texts(row);
+      return `<tr style="animation-delay: ${i * 70}ms">` +
+        `<td><span class="cell">${texts[0]}</span></td>` +
+        `<td><span class="cell">${texts[1]}</span></td>` +
+        `<td><span class="cell">${texts[2]}</span></td>` +
+        `<td class="${row.savings_usd >= 0 ? 'pos' : 'neg'}"><span class="cell">${texts[3]}</span></td>` +
+        `<td class="${(row.roi_pct ?? 0) >= 0 ? 'pos' : 'neg'}"><span class="cell">${texts[4]}</span></td>` +
+        `<td><span class="cell">${texts[5]}</span></td>` +
+        `<td class="barcell"><div class="bar ${row.savings_usd >= 0 ? 'pos' : 'neg'}" style="width: 0"></div></td>` +
+        '</tr>';
+    }).join('');
+    requestAnimationFrame(() => {
+      [...tbody.querySelectorAll('.bar')].forEach((b, i) => {
+        const row = rows[i];
+        if (row) b.style.width = (Math.abs(row.savings_usd) / maxabs) * 100 + '%';
+      });
+    });
+  }
+}
+
+let recalc_timer = null;
+function schedule_recalc() {
+  clearTimeout(recalc_timer);
+  recalc_timer = setTimeout(recalc, 250);
+}
+
+async function recalc() {
+  save_state();
+  const prefill = num('prefill_tps');
+  const gen = num('gen_tps');
+  const summary = $('summary');
+  const tbody = $('roi-body');
+  if (!(prefill > 0) || !(gen > 0)) {
+    summary.innerHTML = '<span class="chip">Measure or enter local throughput (step 1) to see results</span>';
+    tbody.innerHTML = '';
+    $('legend').style.display = 'none';
+    $('chart-wrap').style.display = 'none';
+    chart_now = null;
+    chart_meta = null;
+    return;
+  }
+  const payload = {
+    bench: { prefill_tps: prefill, gen_tps: gen },
+    workload: { prompt_mtok_month: num('prompt_mtok'), output_mtok_month: num('output_mtok') },
+    local: {
+      hardware_cost_usd: num('gpu_cost') + num('system_cost'),
+      power_load_w: num('load_w'),
+      power_idle_w: num('idle_w'),
+      electricity_usd_per_kwh: num('kwh_rate'),
+      dedicated_24_7: $('duty_dedicated').checked,
+      misc_monthly_usd: num('misc_monthly'),
+    },
+    cloud: {
+      input_usd_per_mtok: num('cloud_in'),
+      output_usd_per_mtok: num('cloud_out'),
+      subscription_usd_month: num('cloud_sub'),
+    },
+    horizons_months: [12, 24, 36, 48],
+  };
+  let r;
+  try {
+    const res = await fetch('/api/calc', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      summary.innerHTML = `<span class="chip bad">calc error: ${body.error || res.status}</span>`;
+      tbody.innerHTML = '';
+      return;
+    }
+    r = await res.json();
+  } catch (e) {
+    summary.innerHTML = `<span class="chip bad">✗ ${e.message || e}</span>`;
+    return;
+  }
+
+  // Tooltip text rides a double-quoted attribute — keep double quotes out.
+  const tip = (text) => `<i class="tip" tabindex="0" data-tip="${text}">?</i>`;
+  const cnum = (key, value, fmt) => `<span class="cnum" data-key="${key}" data-val="${value}" data-fmt="${fmt}"></span>`;
+  const chips = [];
+  chips.push('<span class="chip">Local opex <b>' + cnum('opex', r.local_opex_month_usd, 'usd') + '</b>/mo · ' +
+    cnum('kwh', r.energy_kwh_month, 'fmt1') + ' kWh' +
+    tip('Monthly cost of RUNNING the box: electricity (load watts × busy hours, plus idle watts × the remaining hours in dedicated mode) + the other-monthly extras. Hardware is amortized separately in the table below.') +
+    '</span>');
+  const sub = num('cloud_sub');
+  chips.push('<span class="chip">Cloud <b>' + cnum('cloud', r.cloud_cost_month_usd, 'usd') + '</b>/mo' +
+    (sub > 0 ? ` (incl. ${usd(sub)} sub)` : '') +
+    (r.cloud_usd_per_mtok != null ? ' · ' + cnum('blend', r.cloud_usd_per_mtok, 'usd2') + '/Mtok blended' : '') +
+    tip('The same workload priced in the cloud: input + output token spend plus any flat subscription. Blended $/Mtok = the whole bill ÷ all tokens, both directions.') +
+    '</span>');
+  chips.push(r.breakeven_months == null
+    ? '<span class="chip bad">No break-even — monthly local cost ≥ monthly cloud bill' +
+      tip('Local opex alone meets or exceeds the monthly cloud bill, so the hardware can never pay itself back at this workload and pricing.') + '</span>'
+    : '<span class="chip good">Break-even ≈ month ' + cnum('be', r.breakeven_months, 'mo') +
+      tip('The month where cumulative cloud spend overtakes hardware + cumulative local opex — when the rig has fully paid for itself. Earlier is better.') + '</span>');
+  const cap = r.capacity;
+  const util = r.utilization_pct;
+  let util_tip = 'Share of a 730-hour month the box spends busy serving this workload, single-stream: input tokens ÷ prefill speed + output tokens ÷ generation speed. Conservative — real servers batch concurrent requests, so a box can serve somewhat past 100%. Treat over 70% as little headroom.';
+  if (util > 0 && util <= 100) {
+    util_tip += ` At ${fmt1(util)}%, roughly ${Math.max(1, Math.floor(100 / util))}× this workload would fit before saturating.`;
+  }
+  /* sprinkle №6 — a sweeping micro-gauge inside the utilization chip */
+  const circ = 40.84;
+  const gcol = cap === 'over' ? 'var(--bad)' : cap === 'high' ? 'var(--warn)' : 'var(--good)';
+  const gauge = `<svg class="gauge" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true">` +
+    `<circle cx="8" cy="8" r="6.5" style="fill: none; stroke: var(--border); stroke-width: 2.6"/>` +
+    `<circle id="gauge-arc" cx="8" cy="8" r="6.5" transform="rotate(-90 8 8)" style="fill: none; stroke: ${gcol}; ` +
+    `stroke-width: 2.6; stroke-linecap: round; stroke-dasharray: ${circ}; stroke-dashoffset: ${circ}; ` +
+    `transition: stroke-dashoffset .7s cubic-bezier(.22, .9, .35, 1)"/></svg>`;
+  chips.push(`<span class="chip ${cap === 'over' ? 'bad' : cap === 'high' ? 'warn' : ''}">` + gauge +
+    'Utilization ' + cnum('util', util, 'fmt1') + '% (' + cnum('busy', r.busy_hours_month, 'fmt1') + ' h/mo busy)' +
+    (cap === 'over' ? ' — this box cannot serve this workload' : cap === 'high' ? ' — little headroom' : '') +
+    tip(util_tip) + '</span>');
+  summary.innerHTML = chips.join('');
+  run_counters(summary);
+  requestAnimationFrame(() => {
+    const arc = document.getElementById('gauge-arc');
+    if (arc) arc.style.strokeDashoffset = String(circ * (1 - Math.min(util, 100) / 100));
+  });
+  maybe_sparks(r.breakeven_months);
+
+  render_chart({
+    hw: payload.local.hardware_cost_usd,
+    opex: r.local_opex_month_usd,
+    cloud: r.cloud_cost_month_usd,
+  });
+  render_table(r.rows);
+
+  // Reflect the derived utilization back onto the capacity slider (unless the
+  // user is mid-drag — their target wins until they let go).
+  if (!slider_dragging) {
+    $('util_slider').value = Math.min(95, Math.max(1, Math.round(util)));
+  }
+  $('util_readout').textContent = fmt1(util) + '%';
+}
+
+// ── tooltips: hover works via CSS; click/tap toggles; Esc / click-away close ──
+function close_all_tips() {
+  for (const t of document.querySelectorAll('.tip.open')) t.classList.remove('open');
+}
+function place_tip(t) {
+  // Keep the bubble on-screen: shift it horizontally when the icon sits near
+  // a viewport edge (the arrow stays centered on the icon).
+  const r = t.getBoundingClientRect();
+  const w = Math.min(250, window.innerWidth * 0.78);
+  const center = r.left + r.width / 2;
+  let shift = 0;
+  if (center - w / 2 < 8) shift = 8 - (center - w / 2);
+  if (center + w / 2 > window.innerWidth - 8) shift = (window.innerWidth - 8) - (center + w / 2);
+  t.style.setProperty('--tip-w', w + 'px');
+  t.style.setProperty('--tip-shift', shift + 'px');
+}
+function wire_tips() {
+  // Delegated, so dynamically rendered tips (the results chips re-render on
+  // every recalc) work without re-wiring.
+  document.addEventListener('mouseover', (e) => {
+    const t = e.target.closest('.tip');
+    if (t) place_tip(t);
+  });
+  document.addEventListener('focusin', (e) => {
+    const t = e.target.closest('.tip');
+    if (t) place_tip(t);
+  });
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest('.tip');
+    if (!t) { close_all_tips(); return; }
+    e.preventDefault();   // inside a <label>: don't focus/toggle the field
+    const was_open = t.classList.contains('open');
+    close_all_tips();
+    if (!was_open) { place_tip(t); t.classList.add('open'); }
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close_all_tips(); });
+}
+
+function init() {
+  load_state();
+  load_presets();
+  wire_tips();
+  init_chart();
+  $('gpu_preset').addEventListener('change', apply_preset);
+  $('btn-models').addEventListener('click', list_models);
+  $('btn-bench').addEventListener('click', run_benchmark);
+  $('btn-apply-reqs').addEventListener('click', apply_request_estimate);
+  $('util_slider').addEventListener('input', apply_utilization_target);
+  for (const ev of ['pointerup', 'change', 'blur']) {
+    $('util_slider').addEventListener(ev, () => { slider_dragging = false; schedule_recalc(); });
+  }
+  for (const id of TEXT_FIELDS) $(id).addEventListener('input', schedule_recalc);
+  for (const id of CHECK_FIELDS) $(id).addEventListener('change', schedule_recalc);
+  recalc();
+}
+init();
+</script>
+</body>
+</html>

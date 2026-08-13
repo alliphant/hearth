@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+#
+# Hearth CI-ring pre-push gate.
+#
+# Runs the FAST tier of the CI ring before each push — tsc + the source
+# guards + the sub-~1.5s self-contained smoke tier. Catches the class of
+# regression that used to reach `main` and only surface on a manual smoke
+# run + a deploy (e.g. the 2026-07-06 visual-pipeline break). The FULL ring
+# (`bun run ci`, all self-contained smokes) is the pre-merge gate — run it
+# before opening a PR, or let the Gitea Actions workflow run it once a runner
+# is registered.
+#
+# Activate (per clone, one-time — shared with the pre-commit guard):
+#     git config core.hooksPath .githooks
+#
+# Bypass a single push if you must:  git push --no-verify
+#
+set -euo pipefail
+
+if ! command -v bun >/dev/null 2>&1; then
+  echo "pre-push: bun not found on PATH — skipping CI ring" >&2
+  exit 0
+fi
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+echo "pre-push: running the fast CI ring (bun run ci:fast) …"
+bun run ci:fast

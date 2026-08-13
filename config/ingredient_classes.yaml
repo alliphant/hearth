@@ -1,0 +1,157 @@
+# config/ingredient_classes.yaml — coarse refrigerator-life classes for
+# ingredient freshness, used by Brigid when sequencing a week of dinners
+# so the most volatile proteins/produce land early in the week.
+#
+# Five classes by approximate fridge life. Class 1 = use within ~2 days;
+# Class 5 = pantry / months. Class numbers map to the day-of-week target
+# in Brigid's plan logic:
+#   class 1 → Mon/Tue
+#   class 2 → Mon-Wed
+#   class 3 → Mon-Fri (any weeknight)
+#   class 4 → any day, including weekend
+#   class 5 → no constraint
+#
+# The list isn't exhaustive — it's a useful prior. When an ingredient
+# isn't here, Brigid asks the LLM ("which class is `harissa paste`?")
+# and falls back to class 5 if no judgment is available. Add entries as
+# you notice them — chokidar reloads the file with no restart.
+
+class_1:
+  description: "Highly volatile — fish, shellfish, soft leafy greens. Use within ~2 days."
+  ingredients:
+    - "salmon"
+    - "tuna"
+    - "cod"
+    - "halibut"
+    - "trout"
+    - "sea bass"
+    - "tilapia"
+    - "white fish"
+    - "shrimp"
+    - "scallops"
+    - "mussels"
+    - "clams"
+    - "oysters"
+    - "arugula"
+    - "spring mix"
+    - "baby spinach"
+    - "watercress"
+    - "fresh basil"
+    - "fresh cilantro"
+    - "fresh dill"
+
+class_2:
+  description: "Volatile — ground meat, fresh dairy, soft herbs. Use within ~4 days."
+  ingredients:
+    - "ground beef"
+    - "ground turkey"
+    - "ground chicken"
+    - "ground lamb"
+    - "ground pork"
+    - "italian sausage"
+    - "fresh chorizo"
+    - "fresh ricotta"
+    - "fresh mozzarella"
+    - "ricotta"
+    - "burrata"
+    - "creme fraiche"
+    - "heavy cream"
+    - "half and half"
+    - "fresh parsley"
+    - "fresh mint"
+    - "fresh thyme"
+
+class_3:
+  description: "Hardy — whole-muscle meats, romaine, broccoli, cauliflower. Use within ~7 days."
+  ingredients:
+    - "chicken breast"
+    - "chicken thigh"
+    - "whole chicken"
+    - "pork chop"
+    - "pork tenderloin"
+    - "steak"
+    - "beef chuck"
+    - "lamb shoulder"
+    - "bacon"
+    - "tofu"
+    - "romaine"
+    - "kale"
+    - "broccoli"
+    - "cauliflower"
+    - "brussels sprouts"
+    - "bell pepper"
+    - "zucchini"
+    - "yellow squash"
+    - "fennel"
+    - "leeks"
+    - "scallions"
+    - "fresh rosemary"
+    - "fresh oregano"
+    - "fresh sage"
+
+class_4:
+  description: "Stable — root vegetables, hard alliums, eggs, butter, hard cheese. Use within ~14 days."
+  ingredients:
+    - "carrots"
+    - "celery"
+    - "parsnips"
+    - "turnips"
+    - "rutabaga"
+    - "beets"
+    - "potatoes"
+    - "sweet potatoes"
+    - "onions"
+    - "shallots"
+    - "garlic"
+    - "ginger"
+    - "winter squash"
+    - "butternut squash"
+    - "acorn squash"
+    - "spaghetti squash"
+    - "cabbage"
+    - "eggs"
+    - "butter"
+    - "parmesan"
+    - "pecorino"
+    - "cheddar"
+    - "gruyere"
+    - "manchego"
+    - "lemons"
+    - "limes"
+    - "apples"
+    - "oranges"
+
+class_5:
+  description: "Pantry — dry goods, oils, vinegars, canned, frozen. Indefinite."
+  ingredients:
+    - "rice"
+    - "pasta"
+    - "noodles"
+    - "lentils"
+    - "beans"
+    - "chickpeas"
+    - "flour"
+    - "sugar"
+    - "salt"
+    - "olive oil"
+    - "vegetable oil"
+    - "sesame oil"
+    - "vinegar"
+    - "soy sauce"
+    - "fish sauce"
+    - "tomato paste"
+    - "canned tomatoes"
+    - "coconut milk"
+    - "stock"
+    - "broth"
+    - "frozen peas"
+    - "frozen corn"
+    - "frozen spinach"
+    - "frozen berries"
+    - "honey"
+    - "maple syrup"
+    - "mustard"
+    - "tahini"
+    - "miso"
+    - "harissa"
+    - "gochujang"

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en" data-phase="night">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#141210">
+<title>Hearth — guest panel</title>
+<!-- Relative so every asset and API call resolves from /app/panel/ -->
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+
+<div id="spine"></div>
+
+<div id="app">
+  <div class="top">
+    <button id="roomBtn" aria-haspopup="dialog">
+      <span><span class="eyebrow">You're in the</span><span id="roomName">…</span></span>
+      <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <div class="clock"><div class="eyebrow">Right now</div><div id="clock">—</div></div>
+  </div>
+
+  <div class="strip">
+    <div class="stat"><span class="eyebrow">Outside</span><b id="outT">—</b></div>
+    <div class="stat"><span class="eyebrow">House</span><b id="houseT">—</b></div>
+    <div class="stat" id="roomTempBox"><span class="eyebrow" id="roomTempLbl">This room</span><b id="roomT">—</b></div>
+  </div>
+
+  <!-- Only rendered while the doorbell says someone is actually there. -->
+  <div id="door">
+    <div class="doorhead"><i class="dot"></i><b id="doorLbl">Someone's at the front door</b><em id="doorAgo"></em></div>
+    <img id="doorImg" alt="Front door camera">
+  </div>
+
+  <div id="actions"></div>
+
+  <button id="kate">
+    <span class="bars"><i></i><i></i><i></i><i></i><i></i></span>
+    <span id="kateLbl">Ask Kate</span>
+  </button>
+
+  <div id="kateAnswer">
+    <div class="kahead"><b>Kate</b><button id="kateClose" aria-label="Dismiss">×</button></div>
+    <div id="kateHeard"></div>
+    <div id="kateReply"></div>
+  </div>
+
+  <div class="sect">
+    <h3>The house</h3>
+    <div id="houseRows"></div>
+  </div>
+
+  <div class="sect" id="gaps">
+    <h3>Not wired — no entity exists</h3>
+    <ul id="gapList"></ul>
+  </div>
+
+  <footer>
+    <div class="idstrip"><span>hearth · guest panel</span><span id="connState">connecting…</span></div>
+    <div class="demo">
+      <span>Time</span>
+      <button data-ph="morning">Morning</button><button data-ph="afternoon">Afternoon</button>
+      <button data-ph="evening">Evening</button><button data-ph="night">Night</button>
+    </div>
+    <div class="demo"><span>Debug</span><button id="idBtn" aria-pressed="false">Show entity ids</button></div>
+    <div class="idstrip"><span id="srcLine">live from home assistant</span></div>
+  </footer>
+</div>
+
+<div id="sheet" role="dialog" aria-modal="true" aria-label="Choose a room">
+  <div id="scrim"></div>
+  <div id="sheetCard"><h2>Which room are you in?</h2><div class="rooms" id="roomList"></div></div>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script src="panel.js"></script>
+</body>
+</html>

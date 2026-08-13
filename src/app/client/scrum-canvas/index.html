@@ -1,0 +1,802 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hearth Dev Board</title>
+<!-- Vendored, LAN-only, no CDN (both libs verified to make no external calls). -->
+<script src="/app/scrum-canvas/marked.min.js"></script>
+<script src="/app/scrum-canvas/mermaid.min.js"></script>
+<style>
+  :root{
+    --bg:#15100a; --bg2:#1d1610; --surface:#241c13; --surface2:#2c2218;
+    --line:#3a2c1d; --line2:#4a3826;
+    --ink:#efe3cd; --muted:#b29c7e; --faint:#80705a;
+    --gold:#d8ad4a; --ember:#c8531f; --oak:#86a06a; --slate:#8f8a9c; --violet:#a98bc4;
+    --teal:#5aa6a0; --plum:#b07fb0; --crit:#e0563a;
+    --shadow:0 6px 22px rgba(0,0,0,.38);
+    color-scheme: dark;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:
+      radial-gradient(1200px 600px at 80% -10%, #2a2012 0%, transparent 60%),
+      linear-gradient(160deg,#15100a,#120d08);
+    color:var(--ink);
+    font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  .app{display:grid; grid-template-columns:1fr 380px; height:100dvh; overflow:hidden}
+  @media (max-width:980px){ .app{grid-template-columns:1fr; height:auto; overflow:visible} }
+
+  /* ── board column ── */
+  .board{overflow-y:auto; padding:1.6rem 1.8rem 4rem}
+  .topbar{display:flex; align-items:baseline; gap:.9rem; flex-wrap:wrap; margin-bottom:1.3rem}
+  .topbar h1{
+    font:600 1.7rem/1 Georgia,"Iowan Old Style",serif; letter-spacing:.2px; margin:0;
+    color:#f4ead4;
+  }
+  .sprintchip{
+    font-size:.82rem; color:var(--gold); background:rgba(216,173,74,.1);
+    border:1px solid rgba(216,173,74,.3); padding:.22rem .6rem; border-radius:999px;
+  }
+  #status{font-size:.72rem; color:var(--faint); display:flex; align-items:center; gap:.4rem}
+  #status .dot{width:7px;height:7px;border-radius:50%;background:var(--oak); box-shadow:0 0 8px var(--oak)}
+  #status.err .dot{background:var(--ember); box-shadow:0 0 8px var(--ember)}
+
+  .stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:.9rem; margin-bottom:1.3rem}
+  .stat{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:.85rem 1rem; box-shadow:var(--shadow)}
+  .stat .k{font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; color:var(--faint)}
+  .stat .v{font:600 1.5rem/1.2 Georgia,serif; color:#f4ead4; margin-top:.15rem}
+  .stat .sub{font-size:.74rem; color:var(--muted); margin-top:.2rem}
+  .bar{height:7px; border-radius:4px; background:#000a; overflow:hidden; margin-top:.5rem; display:flex}
+  .bar>span{display:block; height:100%}
+
+  .card-wrap{background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:1rem 1.1rem; margin-bottom:1.3rem; box-shadow:var(--shadow)}
+  .card-wrap h2{margin:.1rem 0 .8rem; font:600 .8rem/1 system-ui; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
+  .mermaid{text-align:center}
+
+  /* ── GitHub-style activity heatmap ── */
+  .heat-wrap{display:flex; gap:6px; overflow-x:auto; padding-bottom:2px}
+  .heat-days{display:flex; flex-direction:column; gap:3px; padding-top:0}
+  .heat-days span{height:11px; line-height:11px; font-size:.58rem; color:var(--faint)}
+  .heat{display:flex; gap:3px}
+  .heat .col{display:flex; flex-direction:column; gap:3px}
+  .cell{width:11px; height:11px; border-radius:2px}
+  .heat-months{position:relative; height:13px; margin-left:30px; margin-bottom:3px}
+  .heat-months span{position:absolute; font-size:.62rem; color:var(--faint); top:0}
+  .legend{display:flex; align-items:center; gap:5px; justify-content:flex-end; font-size:.68rem; color:var(--faint); margin-top:9px}
+  .legend .cell{display:inline-block}
+
+  /* ── kanban ── */
+  .lanes{display:grid; grid-auto-flow:column; grid-auto-columns:minmax(232px,1fr); gap:.9rem; overflow-x:auto; padding-bottom:.6rem}
+  @media (max-width:980px){ .lanes{grid-auto-flow:row; grid-auto-columns:auto} }
+  .lane{background:var(--bg2); border:1px solid var(--line); border-radius:14px; padding:.7rem; min-height:90px}
+  .lane-h{display:flex; align-items:center; gap:.5rem; margin:.1rem .2rem .65rem}
+  .lane-h .pip{width:9px;height:9px;border-radius:50%}
+  .lane-h .name{font-weight:600; font-size:.82rem; letter-spacing:.03em}
+  .lane-h .ct{margin-left:auto; font-size:.72rem; color:var(--faint); background:#0006; border-radius:999px; padding:.05rem .45rem}
+  .epic{
+    background:var(--surface); border:1px solid var(--line); border-left:3px solid var(--slate);
+    border-radius:10px; padding:.55rem .65rem; margin-bottom:.5rem; cursor:default; transition:border-color .15s, transform .05s;
+  }
+  .epic:hover{border-color:var(--line2)}
+  .epic.bug{border-left-color:var(--ember)}
+  .epic.crit{border-left-color:var(--crit); box-shadow:0 0 0 1px rgba(224,86,58,.25)}
+  .epic .t{font-size:.86rem; font-weight:550; color:#f1e6d2}
+  .badges{display:flex; flex-wrap:wrap; gap:.3rem; margin-top:.4rem}
+  .b{font-size:.66rem; letter-spacing:.02em; padding:.08rem .38rem; border-radius:999px; border:1px solid transparent; white-space:nowrap}
+  .b.size{background:rgba(216,173,74,.12); color:var(--gold); border-color:rgba(216,173,74,.3)}
+  .b.roi{background:rgba(126,155,107,.14); color:var(--oak); border-color:rgba(126,155,107,.32)}
+  .b.bug{background:rgba(200,83,31,.16); color:#e8a07e; border-color:rgba(200,83,31,.4)}
+  .b.crit{background:rgba(224,86,58,.22); color:#ffb7a3; border-color:rgba(224,86,58,.55)}
+  .b.board-backend{background:rgba(90,166,160,.14); color:var(--teal); border-color:rgba(90,166,160,.32)}
+  .b.board-ios{background:rgba(176,127,176,.14); color:var(--plum); border-color:rgba(176,127,176,.32)}
+  .b.quad{background:#0005; color:var(--muted); border-color:var(--line2)}
+  .b.unscored{background:rgba(224,86,58,.1); color:#e0a08a; border-color:rgba(224,86,58,.3)}
+  .epic .desc{font-size:.78rem; color:var(--muted); margin-top:.45rem; line-height:1.45; display:none}
+  .epic.open .desc{display:block}
+  .epic .desc em{color:var(--faint)}
+  .empty{font-size:.76rem; color:var(--faint); font-style:italic; padding:.3rem .2rem}
+
+  .await li{margin:.3rem 0}
+  .await a{color:var(--gold); text-decoration:none}
+  .await a:hover{text-decoration:underline}
+
+  /* ── chat rail ── */
+  .chat{display:flex; flex-direction:column; min-height:0; background:linear-gradient(180deg,#1d1610,#171109);
+        border-left:1px solid var(--line); height:100dvh}
+  @media (max-width:980px){ .chat{height:78dvh; border-left:none; border-top:1px solid var(--line)} }
+  .chat-h{display:flex; align-items:center; gap:.6rem; padding:.9rem 1.1rem; border-bottom:1px solid var(--line)}
+  .chat-h .av{width:34px;height:34px;border-radius:50%;
+    background:radial-gradient(circle at 30% 30%, #e6c266, #b07a2a); flex:0 0 auto;
+    display:grid; place-items:center; font-weight:700; color:#241c13; font-size:.95rem; box-shadow:0 0 0 2px rgba(216,173,74,.25)}
+  .chat-h .who{font-weight:600}
+  .chat-h .role{font-size:.72rem; color:var(--faint)}
+  .msgs{flex:1 1 auto; min-height:0; overflow-y:auto; padding:1rem 1rem 1.2rem; display:flex; flex-direction:column; gap:.7rem}
+  .msg{max-width:88%; padding:.55rem .75rem; border-radius:13px; font-size:.88rem; line-height:1.5}
+  .msg.bea{align-self:flex-start; background:var(--surface); border:1px solid var(--line); border-bottom-left-radius:4px}
+  .msg.me{align-self:flex-end; background:rgba(216,173,74,.16); border:1px solid rgba(216,173,74,.3); border-bottom-right-radius:4px}
+  .msg p{margin:.3rem 0} .msg p:first-child{margin-top:0} .msg p:last-child{margin-bottom:0}
+  .msg code{background:#0007; padding:.1em .3em; border-radius:4px; font-size:.85em}
+  .msg.note{align-self:center; font-size:.74rem; color:var(--gold); background:rgba(216,173,74,.08);
+            border:1px solid rgba(216,173,74,.2); border-radius:999px; padding:.2rem .7rem}
+  .thinking{align-self:flex-start; display:flex; gap:.25rem; padding:.6rem .8rem}
+  .thinking span{width:6px;height:6px;border-radius:50%;background:var(--gold);opacity:.5;animation:b 1.1s infinite}
+  .thinking span:nth-child(2){animation-delay:.18s} .thinking span:nth-child(3){animation-delay:.36s}
+  @keyframes b{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+  .composer{flex:0 0 auto; border-top:1px solid var(--line); padding:.7rem; display:flex; gap:.5rem; align-items:flex-end}
+  .composer textarea{flex:1; resize:none; background:var(--surface); color:var(--ink); border:1px solid var(--line2);
+    border-radius:11px; padding:.55rem .7rem; font:inherit; max-height:120px; min-height:42px}
+  .composer textarea:focus{outline:none; border-color:var(--gold)}
+  .composer button{background:linear-gradient(180deg,#e0b556,#c2912f); color:#231a10; border:none; font-weight:650;
+    border-radius:11px; padding:0 1rem; height:42px; cursor:pointer}
+  .composer button:disabled{opacity:.5; cursor:default}
+
+  /* ── chat collapse + reopen bubble ── */
+  .chat-collapse{margin-left:auto; flex:0 0 auto; background:none; border:1px solid var(--line2); color:var(--muted);
+    width:28px; height:28px; border-radius:8px; cursor:pointer; font-size:1.1rem; line-height:1; display:grid; place-items:center}
+  .chat-collapse:hover{color:var(--ink); border-color:var(--gold)}
+  .chat-fab{position:fixed; right:20px; bottom:20px; z-index:60; width:54px; height:54px; border-radius:50%;
+    background:radial-gradient(circle at 30% 30%, #e6c266, #b07a2a); color:#241c13; border:none; cursor:pointer;
+    box-shadow:0 8px 22px rgba(0,0,0,.5); font-weight:700; font-size:1.25rem; display:none; align-items:center; justify-content:center; transition:transform .1s}
+  .chat-fab:hover{transform:translateY(-2px)}
+  body.chat-collapsed .app{grid-template-columns:1fr}
+  body.chat-collapsed .chat{display:none}
+  body.chat-collapsed .chat-fab{display:flex}
+
+  /* ── topbar guide button ── */
+  .ghost-btn{margin-left:auto; background:none; border:1px solid var(--line2); color:var(--muted); border-radius:999px;
+    padding:.22rem .7rem; font-size:.78rem; cursor:pointer}
+  .ghost-btn:hover{color:var(--gold); border-color:var(--gold)}
+
+  /* ── guide modal ── */
+  .modal-bg{position:fixed; inset:0; background:rgba(8,5,2,.66); z-index:100; display:none; align-items:center; justify-content:center; padding:1.5rem}
+  .modal-bg.open{display:flex}
+  .modal{background:linear-gradient(180deg,#221a11,#19130c); border:1px solid var(--line2); border-radius:18px;
+    max-width:660px; width:100%; max-height:86vh; overflow-y:auto; padding:1.5rem 1.9rem 2rem; box-shadow:0 24px 70px rgba(0,0,0,.6)}
+  .modal h2{font:600 1.35rem/1.2 Georgia,serif; color:#f4ead4; margin:0 0 .15rem}
+  .modal .lead{color:var(--muted); margin:.1rem 0 1rem; font-size:.92rem}
+  .modal h3{font-size:.78rem; letter-spacing:.07em; text-transform:uppercase; color:var(--gold); margin:1.25rem 0 .35rem}
+  .modal p,.modal li{font-size:.92rem; color:var(--ink); line-height:1.55}
+  .modal ul{margin:.3rem 0; padding-left:1.15rem}
+  .modal li{margin:.32rem 0}
+  .modal code{background:#0007; color:#e8c98a; padding:.12em .42em; border-radius:5px; font-size:.85em}
+  .modal .x{float:right; background:none; border:none; color:var(--faint); font-size:1.5rem; cursor:pointer; line-height:1; margin:-.3rem -.4rem 0 0}
+  .modal .x:hover{color:var(--ink)}
+
+  /* ── filter bar (find one epic among many) ── */
+  .filterbar{display:flex; align-items:center; gap:.55rem; flex-wrap:wrap; margin:-.3rem 0 1.2rem}
+  .filterbar .search{position:relative; flex:1 1 220px; max-width:330px}
+  .filterbar .search input{width:100%; background:var(--surface); border:1px solid var(--line2); color:var(--ink);
+    border-radius:999px; padding:.42rem .85rem .42rem 2rem; font:inherit; font-size:.85rem}
+  .filterbar .search input:focus{outline:none; border-color:var(--gold)}
+  .filterbar .search::before{content:'⌕'; position:absolute; left:.72rem; top:50%; transform:translateY(-52%);
+    color:var(--faint); font-size:1rem; pointer-events:none}
+  .filterbar .search .clear{position:absolute; right:.5rem; top:50%; transform:translateY(-50%); background:none; border:none;
+    color:var(--faint); cursor:pointer; font-size:1rem; line-height:1; display:none; padding:.1rem .2rem}
+  .filterbar .search.has-q .clear{display:block}
+  .chips{display:flex; gap:.28rem}
+  .chip{background:none; border:1px solid var(--line2); color:var(--muted); border-radius:999px;
+    padding:.26rem .68rem; font-size:.75rem; cursor:pointer; transition:color .12s,border-color .12s,background .12s; white-space:nowrap}
+  .chip:hover{color:var(--ink); border-color:var(--faint)}
+  .chip.on{background:rgba(216,173,74,.14); color:var(--gold); border-color:rgba(216,173,74,.45)}
+  .filtermatch{font-size:.74rem; color:var(--faint); margin-left:auto; min-height:1em}
+
+  /* ── card polish ── */
+  .epic{position:relative; cursor:pointer}
+  .epic:hover{border-color:var(--gold); transform:translateY(-1px); box-shadow:0 5px 16px rgba(0,0,0,.32)}
+  .epic .rank{display:inline-block; min-width:1.05rem; text-align:center; font:700 .64rem/1.2 system-ui; color:var(--faint);
+    background:#0006; border-radius:5px; padding:.05rem .22rem; margin-right:.35rem; vertical-align:1px}
+  .epic.hide{display:none}
+  .lane.dim{opacity:.55}
+  .lane-empty{font-size:.74rem; color:var(--faint); font-style:italic; padding:.3rem .2rem}
+
+  /* ── card action modal (click a card → act on it) ── */
+  .card-modal h2{font:600 1.2rem/1.3 Georgia,serif; color:#f4ead4; margin:0 1.4rem 0 0}
+  .cm-id{display:inline-block; font:600 .72rem/1 ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--faint);
+    background:#0006; border:1px solid var(--line); border-radius:6px; padding:.22rem .45rem; margin:.55rem 0 0; cursor:pointer;
+    transition:color .12s,border-color .12s}
+  .cm-id:hover{color:var(--gold); border-color:var(--line2)}
+  .cm-id.copied{color:var(--oak); border-color:var(--oak)}
+  .cm-id.copied::after{content:' ✓ copied'}
+  .cm-badges{display:flex; flex-wrap:wrap; gap:.3rem; margin:.7rem 0 0}
+  .cm-desc{font-size:.9rem; color:var(--muted); line-height:1.55; margin:.7rem 0 0; white-space:pre-wrap}
+  .cm-desc em{color:var(--faint)}
+  .cm-sec{margin-top:1.15rem}
+  .cm-sec .lbl{font-size:.7rem; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); margin-bottom:.4rem}
+  .cm-row{display:flex; flex-wrap:wrap; gap:.4rem; align-items:center}
+  .lanebtn,.scorebtn,.act{background:var(--surface); border:1px solid var(--line2); color:var(--ink); border-radius:9px;
+    padding:.42rem .75rem; font:inherit; font-size:.82rem; cursor:pointer; transition:border-color .12s,background .12s,color .12s}
+  .lanebtn:hover,.scorebtn:hover,.act:hover{border-color:var(--gold)}
+  .lanebtn.cur{background:rgba(216,173,74,.14); border-color:rgba(216,173,74,.5); color:var(--gold); cursor:default}
+  .scoregrp{display:flex; gap:.3rem; align-items:center}
+  .scoregrp .gl{font-size:.74rem; color:var(--muted); margin-right:.1rem}
+  .scorebtn{min-width:2rem; text-align:center; padding:.35rem .5rem}
+  .scorebtn.on{background:rgba(126,155,107,.16); border-color:var(--oak); color:var(--oak)}
+  .act.build{background:linear-gradient(180deg,#e0b556,#c2912f); color:#231a10; border:none; font-weight:650}
+  .act.build:hover{filter:brightness(1.06)}
+  .act.danger{color:#e8a07e; border-color:rgba(200,83,31,.4)}
+  .act.danger:hover{border-color:var(--ember); color:#ffb7a3}
+  .cm-note{font-size:.82rem; color:var(--gold); margin-top:.9rem; min-height:1.1em; line-height:1.45}
+  .cm-note.busy{color:var(--muted)}
+
+  /* ── capped, independently-scrolling lanes + sticky headers (desktop kanban) ── */
+  @media (min-width:981px){
+    .lane{max-height:calc(100dvh - 150px); overflow-y:auto; overflow-x:hidden}
+    .lane-h{position:sticky; top:0; z-index:2; background:var(--bg2);
+      margin:-.7rem -.7rem .55rem; padding:.7rem .7rem .5rem; border-bottom:1px solid var(--line)}
+  }
+
+  /* ── warm thin scrollbars ── */
+  .board,.lane,.msgs{scrollbar-width:thin; scrollbar-color:var(--line2) transparent}
+  .board::-webkit-scrollbar,.lane::-webkit-scrollbar,.msgs::-webkit-scrollbar{width:9px;height:9px}
+  .board::-webkit-scrollbar-thumb,.lane::-webkit-scrollbar-thumb,.msgs::-webkit-scrollbar-thumb{
+    background:var(--line2); border-radius:6px; border:2px solid transparent; background-clip:content-box}
+  .board::-webkit-scrollbar-thumb:hover,.lane::-webkit-scrollbar-thumb:hover,.msgs::-webkit-scrollbar-thumb:hover{background:#5e4830}
+  .board::-webkit-scrollbar-track,.lane::-webkit-scrollbar-track,.msgs::-webkit-scrollbar-track{background:transparent}
+
+  /* ── Beatrice live-activity panel (rectangular LEDs + what she's doing) ── */
+  /* Beatrice hero card (replaces the burndown pane) — full board-column width,
+     so the status never truncates and the code detail gets room. */
+  .bea-hero{background:linear-gradient(180deg,#241a10,#191107)}
+  .bea-hero-top{display:flex; align-items:center; gap:1rem; flex-wrap:wrap}
+  .bea-hero h2{margin:0}
+  .bea-hero .bea-leds{margin-left:auto}
+  .bea-hero .bea-leds .led{width:9px; height:24px}
+  .bea-hero .bea-status{font-size:.96rem; margin-top:.75rem; white-space:normal; overflow:visible; text-overflow:clip; line-height:1.45}
+  .bea-hero .bea-code{margin-top:.85rem}
+  .bea-hero .bea-code pre{max-height:280px; font-size:11.5px}
+  .bea-leds{display:flex; gap:9px; align-items:flex-end}
+  .bea-leds .led-cell{display:inline-flex; flex-direction:column; align-items:center; gap:3px}
+  .bea-leds .led{width:8px; height:19px; border-radius:2px; opacity:.18; transition:opacity .1s ease, box-shadow .1s ease}
+  .bea-leds .led-live{background:var(--oak)}
+  .bea-leds .led-rag{background:var(--gold)}
+  .bea-leds .led-deep{background:var(--violet)}
+  .bea-leds .led-tool{background:var(--teal)}
+  .bea-leds .led.on{opacity:1; animation:led-blink .9s ease-in-out infinite}
+  .bea-leds .led-live.on{box-shadow:0 0 6px var(--oak)}
+  .bea-leds .led-rag.on{box-shadow:0 0 6px var(--gold)}
+  .bea-leds .led-deep.on{box-shadow:0 0 7px var(--violet)}
+  .bea-leds .led-tool.on{box-shadow:0 0 7px var(--teal)}
+  .bea-leds .led-tag{font:700 8px/1 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.09em;
+    color:var(--faint); opacity:.5; transition:color .1s ease, opacity .1s ease}
+  .bea-leds .led-cell:has(.led-live.on) .led-tag{color:var(--oak); opacity:1}
+  .bea-leds .led-cell:has(.led-rag.on)  .led-tag{color:var(--gold); opacity:1}
+  .bea-leds .led-cell:has(.led-deep.on) .led-tag{color:var(--violet); opacity:1}
+  .bea-leds .led-cell:has(.led-tool.on) .led-tag{color:var(--teal); opacity:1}
+  .bea-status{font-size:.8rem; color:var(--faint); margin-top:.55rem; min-height:1.15em; font-style:italic;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; gap:.4rem}
+  .bea-status::before{content:''; width:6px; height:6px; border-radius:50%; background:var(--faint); flex:0 0 auto; opacity:.5}
+  .bea-status.active{color:var(--gold); font-style:normal}
+  .bea-status.active::before{background:var(--gold); opacity:1; box-shadow:0 0 6px var(--gold); animation:led-blink .9s ease-in-out infinite}
+  .bea-code{display:none; margin-top:.6rem}
+  .bea-code.show{display:block}
+  .bea-code .lbl{font:600 .64rem/1 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.07em; text-transform:uppercase;
+    color:var(--teal); opacity:.85; margin-bottom:.3rem; display:flex; align-items:center; gap:.35rem}
+  .bea-code pre{margin:0; max-height:180px; overflow:auto; background:#0c0906; border:1px solid var(--line2); border-radius:8px;
+    padding:.55rem .7rem; font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; color:#cdbfa6; white-space:pre; tab-size:2}
+  .bea-code pre::-webkit-scrollbar{width:8px;height:8px}
+  .bea-code pre::-webkit-scrollbar-thumb{background:var(--line2); border-radius:5px}
+  @keyframes led-blink{0%,100%{filter:brightness(1)} 50%{filter:brightness(1.6)}}
+  .chat-fab.active{box-shadow:0 8px 22px rgba(0,0,0,.5), 0 0 0 0 rgba(216,173,74,.6); animation:fab-pulse 1.4s ease-out infinite}
+  @keyframes fab-pulse{0%{box-shadow:0 8px 22px rgba(0,0,0,.5), 0 0 0 0 rgba(216,173,74,.55)} 100%{box-shadow:0 8px 22px rgba(0,0,0,.5), 0 0 0 14px rgba(216,173,74,0)}}
+</style>
+</head>
+<body>
+<div class="app">
+  <main class="board">
+    <div class="topbar">
+      <h1>Hearth Dev Board</h1>
+      <span class="sprintchip" id="sprintchip">—</span>
+      <button class="ghost-btn" id="guideBtn">✦ Scrum guide</button>
+      <span id="status"><span class="dot"></span><span id="statustext">loading</span></span>
+    </div>
+    <div class="filterbar">
+      <label class="search" id="searchWrap">
+        <input id="filter" type="text" placeholder="Filter epics by name…" autocomplete="off" spellcheck="false">
+        <button class="clear" id="filterClear" title="Clear" aria-label="Clear filter">×</button>
+      </label>
+      <div class="chips" id="boardChips">
+        <button class="chip on" data-board="all">All</button>
+        <button class="chip" data-board="backend">Backend</button>
+        <button class="chip" data-board="ios">iOS</button>
+      </div>
+      <div class="chips" id="typeChips">
+        <button class="chip on" data-type="all">All types</button>
+        <button class="chip" data-type="feature">Features</button>
+        <button class="chip" data-type="bug">Bugs</button>
+      </div>
+      <span class="filtermatch" id="filtermatch"></span>
+    </div>
+    <section class="stats" id="stats"></section>
+    <div class="card-wrap bea-hero" id="beaHero">
+      <div class="bea-hero-top">
+        <h2>Beatrice · live</h2>
+        <div class="bea-leds" id="beaLeds" aria-hidden="true">
+          <span class="led-cell"><i class="led led-live" title="Composing a reply"></i><span class="led-tag">LIVE</span></span>
+          <span class="led-cell"><i class="led led-rag" title="Retrieving / consulting"></i><span class="led-tag">RAG</span></span>
+          <span class="led-cell"><i class="led led-deep" title="Deep-think on the Spark"></i><span class="led-tag">DEEP</span></span>
+          <span class="led-cell"><i class="led led-tool" title="Running a tool"></i><span class="led-tag">TOOL</span></span>
+        </div>
+      </div>
+      <div class="bea-status" id="beaStatus">standby — nothing in progress</div>
+      <div class="bea-code" id="beaCode">
+        <div class="lbl">✎ what she's working on</div>
+        <pre id="beaCodePre"></pre>
+      </div>
+    </div>
+    <div class="card-wrap" id="heatcard" style="display:none">
+      <h2>Board activity · lane moves &amp; adds</h2>
+      <div id="heat"></div>
+    </div>
+    <div class="card-wrap" id="awaitcard" style="display:none">
+      <h2>Awaiting you</h2>
+      <ul class="await" id="await"></ul>
+    </div>
+    <div class="lanes" id="lanes"></div>
+  </main>
+
+  <aside class="chat">
+    <div class="chat-h">
+      <div class="av">B</div>
+      <div><div class="who">Beatrice</div><div class="role">Scrum master · ask her to groom, plan, or capture work</div></div>
+      <button class="chat-collapse" id="chatCollapse" title="Hide Beatrice">›</button>
+    </div>
+    <div class="msgs" id="msgs"></div>
+    <div class="composer">
+      <textarea id="input" rows="1" placeholder="Ask Beatrice…"></textarea>
+      <button id="send">Send</button>
+    </div>
+  </aside>
+</div>
+
+<button class="chat-fab" id="chatFab" title="Chat with Beatrice">B</button>
+
+<div class="modal-bg" id="guideModal">
+  <div class="modal">
+    <button class="x" id="guideClose" title="Close">×</button>
+    <h2>How the board works</h2>
+    <p class="lead">You're the tech lead; <b>Beatrice is the scrum master</b>. <b>Click any card</b> to move it, score it, archive it, or <b>start developing</b> it — or just <b>tell Beatrice</b> in the chat rail (she can do all of it too). Every change is audited either way. <b>“Start developing”</b> hands a backend epic to Beatrice's build pipeline: she opens a reviewed PR — nothing merges without your approval.</p>
+
+    <h3>The five lanes</h3>
+    <p>Backlog → Sprint → In&nbsp;Progress → Review → Done. Every move is logged — that's what fills the activity heatmap.</p>
+
+    <h3>How ranking works</h3>
+    <ul>
+      <li><b>Features</b> rank by <b>ROI = value ÷ effort</b> (S/M/L = 1/3/5). Quadrants: Quick&nbsp;Win, Strategic, Fill-in, Drop.</li>
+      <li><b>Bugs</b> rank by <b>severity</b> — a <b>critical</b> bug always tops the list; high/medium/low interleave with features by ROI.</li>
+      <li><b>Unscored</b> items are flagged (⚑), never silently ranked — score them before grooming.</li>
+    </ul>
+
+    <h3>The ceremonies — just ask Beatrice</h3>
+    <ul>
+      <li><b>Standup</b> — say <code>standup</code> → say/do, what's in progress, the ranked next-up.</li>
+      <li><b>Groom</b> — say <code>groom the board</code> → she ranks the backlog and recommends a sprint, then <b>stops and files the commit as a proposal</b> for you to approve.</li>
+      <li><b>Capture</b> — <code>add a feature: dark mode (M, high value)</code> or <code>add a bug: login crashes on launch (critical, ios)</code>.</li>
+      <li><b>Decisions</b> — when she's blocked on a judgment call she files it as a proposal; it appears under <b>“Awaiting you”</b> and pushes to your phone.</li>
+      <li><b>Retro</b> — say <code>retro</code> at sprint close to capture what went well / slipped / lessons.</li>
+    </ul>
+
+    <h3>Say / Do</h3>
+    <p>Committed points vs shipped points — the most honest number on the board. Treat capacity seriously: better to ship 2 epics fully than commit 5 half-done.</p>
+
+    <h3>Backend vs iOS</h3>
+    <p>One sprint, one capacity pool, split across the two Hearth repos. The split bar + heatmap show where the work is going.</p>
+  </div>
+</div>
+
+<div class="modal-bg" id="cardModal">
+  <div class="modal card-modal">
+    <button class="x" id="cardClose" title="Close">×</button>
+    <div id="cardBody"></div>
+  </div>
+</div>
+
+<script>
+mermaid.initialize({ startOnLoad:false, theme:'dark',
+  xyChart:{ width:760, height:300, xAxis:{labelFontSize:11}, yAxis:{labelFontSize:11} } });
+
+const $ = s => document.querySelector(s);
+const esc = s => (s||'').replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+
+const COLS = [
+  {lane:'product_backlog', label:'Backlog',     hue:'#8f8a9c'},
+  {lane:'sprint_backlog',  label:'Sprint',      hue:'#d8ad4a'},
+  {lane:'in_progress',     label:'In Progress', hue:'#c8531f'},
+  {lane:'review',          label:'Review',      hue:'#a98bc4'},
+  {lane:'done',            label:'Done',        hue:'#86a06a'},
+];
+
+// ── board render ──
+let lastBoardJSON = null;
+let cardsById = {};
+async function loadBoard(){
+  const st = $('#status'), stt = $('#statustext');
+  try{
+    const r = await fetch('/app/scrum-canvas/board.json?t='+Date.now(), {cache:'no-store', credentials:'include'});
+    if(!r.ok) throw new Error(r.status);
+    const data = await r.json();
+    st.classList.remove('err'); stt.textContent = 'live · '+new Date().toLocaleTimeString();
+    // Compare on CONTENT only — drop `generated_at` (it changes every fetch, so
+    // including it would re-render the board every 5s and reset your scroll).
+    const key = JSON.stringify(data, (k, v) => (k === 'generated_at' ? undefined : v));
+    if(key === lastBoardJSON) return;          // no change → don't re-render (keeps scroll + expanded cards)
+    lastBoardJSON = key;
+    renderBoard(data);
+  }catch(e){ st.classList.add('err'); stt.textContent = 'disconnected'; }
+}
+
+function renderBoard(data){
+  const b = data.board, lanes = b.lanes;
+  // sprint chip
+  $('#sprintchip').textContent = b.sprint
+    ? `${b.sprint.label} · day ${b.sprint.day}/${b.sprint.total}`
+    : 'no active sprint';
+
+  // stats
+  const sd = b.say_do, split = b.split;
+  const allCards = COLS.flatMap(c => lanes[c.lane]||[]);
+  const unscored = allCards.filter(c => c.unscored).length;
+  const splitTot = (split.backend+split.ios)||1;
+  $('#stats').innerHTML = `
+    <div class="stat"><div class="k">Say / Do</div>
+      <div class="v">${sd.shipped}/${sd.committed}${sd.pct!=null?` · ${sd.pct}%`:''}</div>
+      <div class="bar"><span style="width:${sd.committed?Math.min(100,100*sd.shipped/sd.committed):0}%;background:var(--oak)"></span></div>
+    </div>
+    <div class="stat"><div class="k">Committed split</div>
+      <div class="v" style="font-size:1.05rem">${split.backend} <span style="color:var(--teal)">be</span> · ${split.ios} <span style="color:var(--plum)">ios</span></div>
+      <div class="bar"><span style="width:${100*split.backend/splitTot}%;background:var(--teal)"></span><span style="width:${100*split.ios/splitTot}%;background:var(--plum)"></span></div>
+    </div>
+    <div class="stat"><div class="k">Capacity</div><div class="v">${b.sprint?b.sprint.capacity_pts:'—'}<span style="font-size:.9rem;color:var(--muted)"> pts</span></div></div>
+    <div class="stat"><div class="k">Unscored</div><div class="v">${unscored}</div><div class="sub">${unscored?'assign size/value before ranking':'all scored ✓'}</div></div>`;
+
+  renderHeatmap(data.heatmap);
+
+  // awaiting you (open scrum_decision proposals — top-level, from the route)
+  const aw = data.awaiting || [];
+  if(aw.length){
+    $('#awaitcard').style.display='';
+    $('#await').innerHTML = aw.map(d=>`<li><a href="/app">${esc(d.title)}</a>${d.summary?` — <span style="color:var(--muted)">${esc(d.summary)}</span>`:''}</li>`).join('');
+  } else $('#awaitcard').style.display='none';
+
+  // lanes — preserve scroll across the re-render (lanes scroll internally; the
+  // board scrolls outer) so a real board change doesn't yank you to the top.
+  const _boardScroll = document.querySelector('.board')?.scrollTop || 0;
+  const _laneScroll = {};
+  document.querySelectorAll('.lane[data-lane]').forEach(l=>{ _laneScroll[l.dataset.lane] = l.scrollTop; });
+  cardsById = {};
+  $('#lanes').innerHTML = COLS.map(col=>{
+    const cards = lanes[col.lane]||[];
+    cards.forEach(c=>{ cardsById[c.id]=c; });
+    const ranked = col.lane==='product_backlog';   // backlog is the grooming-ranked lane
+    const body = cards.length
+      ? cards.map((c,i)=>cardHTML(c, ranked?i+1:null)).join('')
+      : `<div class="empty">nothing here yet</div>`;
+    return `<div class="lane" data-lane="${col.lane}">
+      <div class="lane-h"><span class="pip" style="background:${col.hue}"></span>
+        <span class="name">${col.label}</span><span class="ct">${cards.length}</span></div>
+      ${body}</div>`;
+  }).join('');
+  // restore scroll positions
+  document.querySelectorAll('.lane[data-lane]').forEach(l=>{ if(_laneScroll[l.dataset.lane]) l.scrollTop = _laneScroll[l.dataset.lane]; });
+  // click a card → its action modal
+  document.querySelectorAll('.epic').forEach(el=>{
+    el.addEventListener('click', ()=>openCardModal(el.dataset.id));
+  });
+  const _bd = document.querySelector('.board'); if(_bd) _bd.scrollTop = _boardScroll;
+  applyFilter();   // re-apply any active filter to the freshly-rendered cards
+}
+
+function badgesFor(c){
+  const crit = c.type==='bug' && c.severity==='critical';
+  const badges = [];
+  if(c.type==='bug') badges.push(`<span class="b ${crit?'crit':'bug'}">${c.severity?c.severity+' bug':'bug'}</span>`);
+  if(c.size) badges.push(`<span class="b size">${c.size}</span>`);
+  if(c.roi!=null) badges.push(`<span class="b roi">ROI ${c.roi.toFixed(1)}</span>`);
+  badges.push(`<span class="b board-${c.board}">${c.board}</span>`);
+  if(c.type!=='bug' && c.quadrant && c.quadrant!=='Unscored') badges.push(`<span class="b quad">${c.quadrant}</span>`);
+  if(c.unscored) badges.push(`<span class="b unscored">⚑ unscored</span>`);
+  return badges.join('');
+}
+function cardHTML(c, rank){
+  const crit = c.type==='bug' && c.severity==='critical';
+  const cls = ['epic', c.type==='bug'?'bug':'', crit?'crit':''].filter(Boolean).join(' ');
+  const rankChip = rank ? `<span class="rank">${rank}</span>` : '';
+  const ft = esc(((c.title||'')+' '+(c.description||'')+' '+(c.value_note||'')+' '+(c.quadrant||'')+' '+(c.board||'')).toLowerCase());
+  return `<div class="${cls}" data-id="${esc(c.id)}" data-board="${esc(c.board||'')}" data-type="${esc(c.type||'')}" data-text="${ft}"><div class="t">${rankChip}${esc(c.title)}</div><div class="badges">${badgesFor(c)}</div></div>`;
+}
+
+function thin(labels, max=16){
+  if(labels.length<=max) return labels;
+  const step = Math.ceil(labels.length/max);
+  return labels.map((l,i)=> i%step===0 ? l : '');
+}
+
+// GitHub-style contribution heatmap (warm ramp). days = chronological {date,count}.
+const HEAT_LV = ['#211a11','#5a4a1f','#8a6c24','#c2912f','#f0c862'];
+const HEAT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const heatLevel = c => c===0?0 : c<=2?1 : c<=4?2 : c<=7?3 : 4;
+function renderHeatmap(hm){
+  const card = $('#heatcard'); const days = (hm&&hm.days)||[];
+  if(!days.length){ card.style.display='none'; return; }
+  card.style.display='';
+  // pad the first column up to Sunday so columns are Sun→Sat weeks
+  const first = new Date(days[0].date+'T00:00:00');
+  const cells = [...Array(first.getDay()).fill(null), ...days];
+  const weeks = [];
+  for(let i=0;i<cells.length;i+=7) weeks.push(cells.slice(i,i+7));
+  const CW = 14; // column pitch: 11px cell + 3px gap
+  let labels = '', lastM = -1, lastLabelCol = -99;
+  weeks.forEach((wk,i)=>{
+    const fr = wk.find(c=>c);
+    if(!fr) return;
+    const m = new Date(fr.date+'T00:00:00').getMonth();
+    if(m!==lastM){
+      lastM = m;
+      // skip the leading partial month (i===0) and any label too close to the
+      // previous one, so adjacent month labels don't collide (GitHub's rule).
+      if(i>=1 && i-lastLabelCol>=3){ labels += `<span style="left:${i*CW}px">${HEAT_MONTHS[m]}</span>`; lastLabelCol=i; }
+    }
+  });
+  const cols = weeks.map(wk=>{
+    const cs = Array.from({length:7},(_,d)=>{
+      const c = wk[d];
+      if(!c) return '<div class="cell" style="background:transparent"></div>';
+      return `<div class="cell" title="${c.date}: ${c.count} event${c.count===1?'':'s'}" style="background:${HEAT_LV[heatLevel(c.count)]}"></div>`;
+    }).join('');
+    return `<div class="col">${cs}</div>`;
+  }).join('');
+  const dayLabels = ['','Mon','','Wed','','Fri',''].map(l=>`<span>${l}</span>`).join('');
+  $('#heat').innerHTML = `
+    <div class="heat-months">${labels}</div>
+    <div class="heat-wrap">
+      <div class="heat-days">${dayLabels}</div>
+      <div class="heat">${cols}</div>
+    </div>
+    <div class="legend">${hm.total} event${hm.total===1?'':'s'} this year · Less ${HEAT_LV.map(c=>`<span class="cell" style="background:${c}"></span>`).join('')} More</div>`;
+}
+
+// ── Beatrice chat ──
+const CONV_KEY='hearth_scrum_beatrice_conv';
+let convId = localStorage.getItem(CONV_KEY) || null;
+const msgs = $('#msgs');
+
+function bubble(cls, html){ const d=document.createElement('div'); d.className='msg '+cls; d.innerHTML=html; msgs.appendChild(d); msgs.scrollTop=msgs.scrollHeight; return d; }
+function note(text){ bubble('note', esc(text)); }
+
+bubble('bea', "Hi — I'm Beatrice. I run the board. Try <b>“standup”</b>, <b>“groom the board”</b>, or <b>“add a bug: login crashes on launch (critical, ios)”</b>. When I want to commit a sprint I'll file it as a proposal for you to approve.");
+
+async function sendChat(){
+  const input = $('#input'), btn = $('#send');
+  const text = input.value.trim();
+  if(!text) return;
+  input.value=''; input.style.height='auto'; btn.disabled=true;
+  bubble('me', esc(text));
+  const think = document.createElement('div'); think.className='thinking';
+  think.innerHTML='<span></span><span></span><span></span>'; msgs.appendChild(think); msgs.scrollTop=msgs.scrollHeight;
+  try{
+    const r = await fetch('/app/api/chat/send',{
+      method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ specialist_id:'trainer', content:text, ...(convId?{conversation_id:convId}:{}) })
+    });
+    think.remove();
+    if(!r.ok){ note(`(couldn't reach Beatrice — ${r.status})`); btn.disabled=false; return; }
+    const data = await r.json();
+    if(data.conversation_id){ convId=data.conversation_id; localStorage.setItem(CONV_KEY, convId); }
+    bubble('bea', marked.parse(data.message?.content_md || '…'));
+    const n = (data.proposals_created||[]).length;
+    if(n) note(`📋 filed ${n} proposal${n>1?'s':''} for your approval — open the app to decide`);
+    loadBoard();                                  // her edits may have changed the board
+  }catch(e){ think.remove(); note('(network error)'); }
+  btn.disabled=false; input.focus();
+}
+
+$('#send').addEventListener('click', sendChat);
+$('#input').addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendChat(); } });
+$('#input').addEventListener('input', e=>{ e.target.style.height='auto'; e.target.style.height=Math.min(120,e.target.scrollHeight)+'px'; });
+
+// ── collapse / reopen the chat rail ──
+const COLLAPSE_KEY='hearth_scrum_chat_collapsed';
+function setCollapsed(v){ document.body.classList.toggle('chat-collapsed', v); localStorage.setItem(COLLAPSE_KEY, v?'1':'0'); }
+$('#chatCollapse').addEventListener('click', ()=>setCollapsed(true));
+$('#chatFab').addEventListener('click', ()=>{ setCollapsed(false); $('#input').focus(); });
+if(localStorage.getItem(COLLAPSE_KEY)==='1') setCollapsed(true);
+
+// ── scrum guide modal ──
+const guide = $('#guideModal');
+$('#guideBtn').addEventListener('click', ()=>guide.classList.add('open'));
+$('#guideClose').addEventListener('click', ()=>guide.classList.remove('open'));
+guide.addEventListener('click', e=>{ if(e.target===guide) guide.classList.remove('open'); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') guide.classList.remove('open'); });
+
+// ── live filter (find one epic among many; runs client-side after each render) ──
+const filterState = { q:'', board:'all', type:'all' };
+function applyFilter(){
+  const terms = filterState.q.toLowerCase().split(/\s+/).filter(Boolean);
+  const active = !!terms.length || filterState.board!=='all' || filterState.type!=='all';
+  let total=0, shown=0;
+  document.querySelectorAll('.lane').forEach(lane=>{
+    let lt=0, ls=0;
+    lane.querySelectorAll('.epic').forEach(ep=>{
+      lt++; total++;
+      const text = ep.dataset.text||'';
+      const ok = terms.every(t=>text.includes(t))
+        && (filterState.board==='all' || ep.dataset.board===filterState.board)
+        && (filterState.type==='all'  || ep.dataset.type===filterState.type);
+      ep.classList.toggle('hide', !ok);
+      if(ok){ ls++; shown++; }
+    });
+    const ct = lane.querySelector('.ct');
+    if(ct) ct.textContent = active ? `${ls}/${lt}` : `${lt}`;
+    let le = lane.querySelector('.lane-empty');
+    if(active && lt>0 && ls===0){
+      if(!le){ le=document.createElement('div'); le.className='lane-empty'; le.textContent='no matches'; lane.appendChild(le); }
+    } else if(le) le.remove();
+    lane.classList.toggle('dim', active && lt>0 && ls===0);
+  });
+  $('#filtermatch').textContent = active ? `${shown} of ${total} shown` : '';
+  $('#searchWrap').classList.toggle('has-q', !!filterState.q);
+}
+const filterInput = $('#filter');
+filterInput.addEventListener('input', e=>{ filterState.q = e.target.value; applyFilter(); });
+$('#filterClear').addEventListener('click', ()=>{ filterInput.value=''; filterState.q=''; applyFilter(); filterInput.focus(); });
+$('#boardChips').addEventListener('click', e=>{ const b=e.target.closest('.chip'); if(!b) return;
+  filterState.board=b.dataset.board; b.parentElement.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on', c===b)); applyFilter(); });
+$('#typeChips').addEventListener('click', e=>{ const b=e.target.closest('.chip'); if(!b) return;
+  filterState.type=b.dataset.type; b.parentElement.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on', c===b)); applyFilter(); });
+document.addEventListener('keydown', e=>{
+  if(e.key==='/' && document.activeElement!==filterInput && !/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName||'')){
+    e.preventDefault(); filterInput.focus();
+  }
+});
+
+// ── card action modal: move / score / archive / start developing ──
+const cardModal = $('#cardModal');
+let modalCardId = null;
+function closeCardModal(){ cardModal.classList.remove('open'); modalCardId=null; }
+function setCmNote(t, busy){ const n=$('#cmNote'); if(n){ n.textContent=t; n.classList.toggle('busy', !!busy); } }
+function openCardModal(id){
+  const c = cardsById[id]; if(!c) return;
+  modalCardId = id;
+  const laneBtns = COLS.map(col=>
+    `<button class="lanebtn${col.lane===c.lane?' cur':''}" data-act="move" data-lane="${col.lane}"${col.lane===c.lane?' disabled':''}>${col.label}</button>`
+  ).join('');
+  let scoreRow;
+  if(c.type==='bug'){
+    scoreRow = `<div class="scoregrp"><span class="gl">severity</span>${['critical','high','medium','low'].map(s=>`<button class="scorebtn${c.severity===s?' on':''}" data-act="sev" data-v="${s}">${s}</button>`).join('')}</div>`;
+  } else {
+    const eff = ['S','M','L'].map(s=>`<button class="scorebtn${c.size===s?' on':''}" data-act="size" data-v="${s}">${s}</button>`).join('');
+    const val = ['S','M','L'].map(s=>`<button class="scorebtn${c.value===s?' on':''}" data-act="value" data-v="${s}">${s}</button>`).join('');
+    scoreRow = `<div class="scoregrp"><span class="gl">effort</span>${eff}</div><div class="scoregrp"><span class="gl">value</span>${val}</div>`;
+  }
+  const descParts = [];
+  if(c.description) descParts.push(esc(c.description));
+  if(c.value_note) descParts.push(`<em>${esc(c.value_note)}</em>`);
+  const desc = descParts.length ? `<div class="cm-desc">${descParts.join('\n\n')}</div>` : '';
+  const buildLabel = c.board==='backend' ? '▶ Start developing' : '▶ Start (move to In Progress)';
+  $('#cardBody').innerHTML = `
+    <h2>${esc(c.title)}</h2>
+    <span class="cm-id" data-copy="${esc(c.id)}" title="Click to copy the epic id">${esc(c.id)}</span>
+    <div class="cm-badges">${badgesFor(c)}</div>
+    ${desc}
+    <div class="cm-sec"><div class="lbl">Move to</div><div class="cm-row">${laneBtns}</div></div>
+    <div class="cm-sec"><div class="lbl">Score</div><div class="cm-row">${scoreRow}</div></div>
+    <div class="cm-sec"><div class="lbl">Actions</div><div class="cm-row">
+      <button class="act build" data-act="develop">${buildLabel}</button>
+      <button class="act danger" data-act="archive">Archive</button>
+      <a class="act" href="/app" target="_blank" rel="noopener">Open in app ↗</a>
+    </div></div>
+    <div class="cm-note" id="cmNote"></div>`;
+  cardModal.classList.add('open');
+}
+
+async function cardAction(act, btn){
+  const id = modalCardId; if(!id) return;
+  if(act==='develop'){
+    const c = cardsById[id];
+    const msg = c && c.board==='backend'
+      ? "Hand this to Beatrice to start developing? She'll investigate the codebase and open a reviewed PR — nothing merges without your approval."
+      : 'Move this to In Progress?';
+    if(!confirm(msg)) return;
+  }
+  try{
+    let r;
+    if(act==='move'){
+      setCmNote('Moving…', true);
+      r = await fetch(`/api/scrum/epic/${id}/move`, {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body:JSON.stringify({to_lane:btn.dataset.lane})});
+    } else if(act==='size' || act==='value' || act==='sev'){
+      setCmNote('Scoring…', true);
+      const item = {epic_id:id}; item[act==='sev'?'severity':act] = btn.dataset.v;
+      r = await fetch(`/api/scrum/epics/score`, {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body:JSON.stringify({items:[item]})});
+    } else if(act==='archive'){
+      setCmNote('Archiving…', true);
+      r = await fetch(`/api/scrum/epic/${id}`, {method:'DELETE', credentials:'include'});
+    } else if(act==='develop'){
+      setCmNote('Handing to Beatrice…', true);
+      r = await fetch(`/api/scrum/epic/${id}/develop`, {method:'POST', credentials:'include'});
+    } else return;
+    if(!r.ok){ const e = await r.json().catch(()=>({})); setCmNote(`Couldn't ${act} — ${e.error||('HTTP '+r.status)}`); return; }
+    const data = await r.json().catch(()=>({}));
+    await loadBoard();                       // board changed → refresh + rebuild cardsById
+    const stillOnBoard = !!cardsById[id];
+    if(stillOnBoard) openCardModal(id); else closeCardModal();
+    if(stillOnBoard) setCmNote(act==='develop' ? (data.note || 'Done.') : ({move:'Moved.',size:'Scored.',value:'Scored.',sev:'Scored.'}[act]||'Done.'));
+  }catch(e){ setCmNote('Network error — try again.'); }
+}
+
+$('#cardBody').addEventListener('click', e=>{
+  const cp = e.target.closest('[data-copy]');
+  if(cp){ try{ navigator.clipboard?.writeText(cp.dataset.copy); }catch(_){} cp.classList.add('copied'); setTimeout(()=>cp.classList.remove('copied'), 1100); return; }
+  const btn=e.target.closest('[data-act]'); if(btn && !btn.disabled) cardAction(btn.dataset.act, btn);
+});
+$('#cardClose').addEventListener('click', closeCardModal);
+cardModal.addEventListener('click', e=>{ if(e.target===cardModal) closeCardModal(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeCardModal(); });
+
+// ── Beatrice live activity: rectangular LEDs + "what she's doing" (SSE) ──
+// Same channels as the app's specialist rail (live / rag / deep / tool), driven
+// by the SAME events — filtered to Beatrice (trainer) so the scrum page shows
+// her work (chat turns AND background grooming/standup/builds) as it happens.
+const BEA_ID = 'trainer';
+const beaLeds = $('#beaLeds'), beaStatusEl = $('#beaStatus'), chatFab = $('#chatFab');
+const beaCode = $('#beaCode'), beaCodePre = $('#beaCodePre');
+function beaShowCode(txt){ if(beaCodePre) beaCodePre.textContent = txt; if(beaCode) beaCode.classList.add('show'); }
+const beaAct = { live:false, rag:false, deep:false, tool:false, toolLabel:null, status:null };
+const beaLedTimers = {};
+function beaSetLed(ch, on){ beaLeds?.querySelector('.led-'+ch)?.classList.toggle('on', !!on); }
+function beaFlash(ch, on){            // min on-time so a brief blip is still visible (mirrors app.js flash_led)
+  if(beaLedTimers[ch]){ clearTimeout(beaLedTimers[ch]); beaLedTimers[ch]=null; }
+  if(on){ beaAct[ch]=true; beaSetLed(ch,true); }
+  else { beaLedTimers[ch]=setTimeout(()=>{ beaAct[ch]=false; beaSetLed(ch,false); beaLedTimers[ch]=null; beaRender(); }, 320); }
+  beaRender();
+}
+let beaStatusTimer = null;
+function beaSetStatus(s, ttl){
+  beaAct.status = s || null;
+  if(beaStatusTimer){ clearTimeout(beaStatusTimer); beaStatusTimer=null; }
+  if(s && ttl>0){ beaStatusTimer = setTimeout(()=>{ beaAct.status=null; beaRender(); }, ttl*1000); }
+  beaRender();
+}
+function beaRender(){
+  let txt, active=true;
+  if(beaAct.tool && beaAct.toolLabel) txt = beaAct.toolLabel;   // most precise — the live tool call
+  else if(beaAct.status) txt = beaAct.status;                   // ambient — deliberating / running a job
+  else if(beaAct.live) txt = 'composing a reply…';
+  else if(beaAct.deep) txt = 'thinking deeply…';
+  else if(beaAct.rag) txt = 'retrieving…';
+  else { txt = 'standby'; active = false; }
+  if(beaStatusEl){ beaStatusEl.textContent = txt; beaStatusEl.classList.toggle('active', active); }
+  if(chatFab) chatFab.classList.toggle('active', active);       // pulse the reopen bubble when she's busy + rail collapsed
+}
+(function beaSSE(){
+  let backoff = 1000;
+  (function open(){
+    let es; try{ es = new EventSource('/app/api/events'); }catch(_){ return; }
+    es.onopen = ()=>{ backoff = 1000; };
+    es.onmessage = (ev)=>{
+      let e; try{ e = JSON.parse(ev.data); }catch{ return; }
+      if(e.specialist_id !== BEA_ID) return;
+      switch(e.type){
+        case 'specialist_thinking':{
+          const on = e.state === 'started';
+          beaAct.live = on; beaSetLed('live', on);
+          if(!on){ beaAct.tool=false; beaAct.toolLabel=null; beaSetLed('tool', false); }   // turn over → clear tool
+          beaRender(); break;
+        }
+        case 'specialist_activity': beaFlash(e.channel === 'deep' ? 'deep' : 'rag', e.state === 'on'); break;
+        case 'tool_invoked': beaAct.toolLabel = e.input_summary ? `${e.tool_name}: ${e.input_summary}` : e.tool_name; if(e.preview) beaShowCode(e.preview); beaFlash('tool', true); break;
+        case 'tool_completed': beaFlash('tool', false); break;
+        case 'specialist_status': beaSetStatus(e.status, e.ttl_seconds || 60); break;
+      }
+    };
+    es.onerror = ()=>{ try{ es.close(); }catch{} const d = Math.min(30000, backoff); backoff = Math.min(30000, backoff*2); setTimeout(open, d); };
+  })();
+})();
+beaRender();
+
+loadBoard();
+setInterval(loadBoard, 5000);
+</script>
+</body>
+</html>

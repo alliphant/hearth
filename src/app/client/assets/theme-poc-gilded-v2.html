@@ -1,0 +1,4058 @@
+<!doctype html>
+<html lang="en" data-theme="gilded">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Hearth — Liquid Glass theme POC</title>
+<style>
+/* ════════════════════════════════════════════════════════════════════
+   HEARTH GILDED / FROSTED THEME POC — second pass
+   ─────────────────────────────────────────────────────────────────────
+   Adds, beyond pass 1:
+     1.  Liquid-glass refraction via SVG feDisplacementMap on backdrop
+     2.  Theme toggle: warm gold  ↔  cool milky frosted glass
+     3.  Wax-seal specialist sigils (with crack patina for lapsed)
+     4.  Approval = wax-seal press animation
+     5.  Trust-tier patina on conversation bubbles (high / medium / low)
+     6.  Streaming text that rises through the surface
+     7.  View Transitions for state morphs (proposal expand, specialist switch)
+     8.  Consult thread — gold filament between two staff during a call
+     9.  CSS `interpolate-size: allow-keywords` for height: auto transitions
+   ──────────────────────────────────────────────────────────────────── */
+
+
+/* ── 1.  THEME-INDEPENDENT BASE ──────────────────────────────────────── */
+
+html { interpolate-size: allow-keywords; }   /* (10) auto ↔ fixed height */
+
+:root {
+  --bg-0: #0a0805;
+  --bg-1: #120e08;
+  --radius: 20px;
+  --radius-sm: 14px;
+  --radius-pill: 999px;
+  --serif: "Cormorant Garamond", "Cormorant", "EB Garamond", "Iowan Old Style", Georgia, serif;
+
+  /* Design-system tokens (Apple-style: tight scale, named easings) */
+  --ease-out:    cubic-bezier(.25, .9, .3, 1);
+  --ease-in-out: cubic-bezier(.4, 0, .2, 1);
+  --ease-spring: cubic-bezier(.18, 1.2, .3, 1);
+
+  /* Type scale — single source of truth. Use these tokens, not raw px. */
+  --text-caption:   11px;
+  --text-body-sm:   13px;
+  --text-body:      15px;
+  --text-emphasis:  17px;
+  --text-head:      22px;
+  --text-display:   30px;
+  --text-hero:      44px;
+  --lh-tight: 1.2;
+  --lh-body:  1.55;
+
+  /* Spacing scale — 4 base, rising. Use these everywhere. */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* Active-specialist hue — overwritten by JS each time the active
+     specialist changes. The whole room subtly takes on the active
+     persona's color identity. Default = Kate (34 = warm amber). */
+  --active-hue: 34;
+  --active-tint:   hsla(var(--active-hue), 55%, 70%, 0.55);
+  --active-strong: hsl(var(--active-hue), 65%, 65%);
+  --active-soft:   hsla(var(--active-hue), 55%, 60%, 0.18);
+  --active-faint:  hsla(var(--active-hue), 50%, 55%, 0.08);
+}
+
+::selection { background: color-mix(in srgb, var(--metal-hi) 35%, transparent);
+              color: var(--text-etch); }
+
+/* ── Quiet-hours posture ────────────────────────────────────────
+   When body.quiet-hours is set, the room dims, ambient warmth
+   pulls back, and motion slows. The UI knows it's late. */
+body.quiet-hours {
+  filter: brightness(0.88) saturate(0.85);
+}
+body.quiet-hours::before {
+  opacity: 0.55;          /* ambient radials fade */
+}
+body.quiet-hours *,
+body.quiet-hours *::before,
+body.quiet-hours *::after {
+  animation-duration: calc(var(--anim-base, 1s) * 1.30) !important;
+  transition-duration: 320ms !important;
+}
+
+/* Keyboard focus rings — every interactive surface gets a warm
+   active-hue ring. Mouse users don't see it; keyboard users do. */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+.input:focus-visible {
+  outline: 2px solid var(--active-tint);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* Respect prefers-reduced-motion — silence breathing seals, mote
+   wobble, receiver glow keyframes, head-chev slide. Functionality
+   stays; ambient motion stops. */
+@media (prefers-reduced-motion: reduce) {
+  .seal,
+  .name-recv-pulse,
+  .recv-glow,
+  .countdown,
+  .status-dot[data-state="thinking"],
+  .status-dot[data-state="consulting"] {
+    animation: none !important;
+  }
+  *, *::before, *::after {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+}
+
+/* ── 2.  THEME: GILDED (warm gold) ──────────────────────────────────── */
+
+/* ── THEME: GILDED — frosted glass kissed with gold ──────────────
+   Designer brief: the dominant material is COOL FROSTED GLASS. Gold
+   is the accent — concentrated where it would catch the light on a
+   real glass-and-brass object: a thin warm catch-light along the top
+   bevel of each pane, a soft warm gradient kiss in the top-right
+   corner (sun glancing off a polished edge), and the brass hardware
+   itself (the matte buttons, the wax-seal letter, the brand mark).
+
+   Everything else — body fills, borders, text — reads as pale
+   champagne pearl, NOT as bright gold. The eye finds the warm hits
+   where they earn their place, instead of being told "this is gold"
+   in every direction. */
+[data-theme="gilded"] {
+  --bg-0: #08070a;
+  --bg-1: #0e0c10;
+  --bg-2: #16131a;
+
+  /* Brass-hardware scale — still richly gold, used ONLY where it
+     reads as polished metal (matte buttons, seal letter, brand). */
+  --metal-hi:   #f3dcaa;   /* pale champagne — catch-light on a bevel */
+  --metal:      #c89337;   /* primary brass (button mid, accents)     */
+  --metal-mid:  #a87616;   /* button body                              */
+  --metal-lo:   #6f4910;   /* button shadow                            */
+  --metal-deep: #2c1e0c;
+  --metal-ink:  #170e02;
+
+  /* Glass tints — near-neutral pearl with just a breath of warmth.
+     The interior of every pane should NOT shout "gold." */
+  --glass-tint:    rgba(248, 240, 222, 0.030);
+  --glass-tint-2:  rgba(160, 140, 105, 0.015);
+  --glass-border:  rgba(232, 218, 188, 0.22);
+  --glass-edge-hi: rgba(252, 232, 188, 0.34);   /* the top catch-light */
+  --glass-edge-lo: rgba(0, 0, 0, 0.55);
+
+  /* Ambient — warm hearth glow from top-right + a softer breath
+     from the bottom-left, like candles on both sides of the room.
+     Felt clearly without ever shouting. */
+  --ambient-1: rgba(212, 142,  52, 0.26);
+  --ambient-2: rgba(184, 112,  46, 0.14);
+
+  /* Text — pale ivory-warm, NOT gold. Reads as etched bone-china. */
+  --text-etch:      rgba(244, 234, 214, 0.86);
+  --text-etch-soft: rgba(244, 234, 214, 0.55);
+  --text-on-metal:  #170e02;
+
+  --thread-color: #d2a050;   /* (9) consult thread — warm pearl */
+
+  /* Grain — desaturated. Almost neutral, the faintest cream. */
+  --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.96  0 0 0 0 0.90  0 0 0 0 0.78  0 0 0 0.10 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  /* Bright grain still warmer — for the brass buttons. */
+  --grain-bright: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 0.82  0 0 0 0 0.42  0 0 0 0.45 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+/* ── The "flame of gold" overlay — only in the gilded theme.
+   A soft warm radial in the top-right corner of each pane, like
+   the bevel catching low afternoon light. Layered as ::after so it
+   sits above the grain but below content; mix-blend-mode: screen
+   means it ADDS warmth without dimming what's underneath. */
+[data-theme="gilded"] .pane::after {
+  content: "";
+  position: absolute; inset: 0; border-radius: inherit;
+  background:
+    radial-gradient(80% 60% at 100% 0%,
+                    rgba(248, 200, 130, 0.10) 0%,
+                    rgba(248, 200, 130, 0.04) 28%,
+                    transparent 60%),
+    radial-gradient(50% 40% at 0% 100%,
+                    rgba(220, 170,  90, 0.045) 0%,
+                    transparent 60%);
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+/* ── 3.  THEME: FROSTED (milky white glass) ─────────────────────────── */
+
+[data-theme="frosted"] {
+  --bg-0: #07090c;
+  --bg-1: #0d1116;
+  --bg-2: #11161c;
+
+  --metal-hi:  #ffffff;
+  --metal:     #dfe6ec;
+  --metal-mid: #aab2b8;
+  --metal-lo:  #6e757b;
+  --metal-deep:#1d2128;
+  --metal-ink: #0c0f13;
+
+  --glass-tint:    rgba(245, 250, 255, 0.045);
+  --glass-tint-2:  rgba(150, 180, 200, 0.025);
+  --glass-border:  rgba(220, 232, 244, 0.30);
+  --glass-edge-hi: rgba(255, 255, 255, 0.34);
+  --glass-edge-lo: rgba(0, 0, 0, 0.55);
+
+  --ambient-1: rgba(140, 170, 200, 0.18);
+  --ambient-2: rgba(80, 110, 140, 0.14);
+
+  --text-etch:     rgba(240, 246, 252, 0.86);
+  --text-etch-soft:rgba(240, 246, 252, 0.55);
+  --text-on-metal: #0c1115;
+
+  --thread-color:  #cfe2f3;
+
+  --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.98  0 0 0 0 0.99  0 0 0 0 1  0 0 0 0.10 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  --grain-bright: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.35 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+/* ── 4.  CANVAS ──────────────────────────────────────────────────────── */
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; height: 100%;
+  background: var(--bg-0);
+  color: var(--text-etch);
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -2;
+  background:
+    radial-gradient(60vw 50vh at 18% 22%, var(--ambient-1), transparent 60%),
+    radial-gradient(80vw 60vh at 82% 88%, var(--ambient-2), transparent 65%),
+    linear-gradient(180deg, var(--bg-1) 0%, var(--bg-0) 100%);
+  transition: background 600ms ease;
+}
+body::after {
+  content: ""; position: fixed; inset: 0; z-index: -1;
+  background-image: var(--grain);
+  opacity: 0.10; mix-blend-mode: overlay; pointer-events: none;
+}
+
+/* ── 5.  SHELL ───────────────────────────────────────────────────────── */
+
+.shell {
+  display: grid;
+  grid-template-columns: 280px 1fr 360px;
+  grid-template-rows: 64px 1fr;
+  grid-template-areas:
+    "topbar topbar topbar"
+    "left   main   right";
+  height: 100dvh;
+}
+
+/* ── 6.  PANE — bezel-displacement liquid glass ──────────────────────
+   (1) Approach ported from archisvaze/liquid-glass: each pane gets a
+   procedurally generated displacement map (a canvas where the interior
+   is neutral gray = no displacement, and a ring of `bezelWidth` at the
+   edges encodes a cosine-ramp displacement vector pointing inward).
+   feDisplacementMap then bends backdrop pixels at those edges, like
+   light passing through a real glass tile. A second canvas-drawn
+   specular highlight is composited on top.
+
+   The filter is built per-pane in JS (see <script> block below) because
+   the displacement map dimensions must match each pane's pixel size.
+   Toggleable via the .no-refract class on body for A/B comparison. */
+
+.pane {
+  position: relative;
+  background: linear-gradient(135deg, var(--glass-tint) 0%, var(--glass-tint-2) 100%);
+  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  backdrop-filter:         blur(18px) saturate(1.35);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  /* Pillow stack: deep soft bloom on the outside, warm interior glow,
+     gentle inset highlight at the top bevel. Reads as plush, not flat. */
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge-hi),
+    inset 0 -1px 0 rgba(0,0,0,0.30),
+    inset 0 0 120px color-mix(in srgb, var(--metal-hi) 6%, transparent),
+    0 4px 14px rgba(0,0,0,0.32),
+    0 18px 60px rgba(0,0,0,0.45),
+    0 0 80px color-mix(in srgb, var(--ambient-1) 25%, transparent);
+}
+
+/* frosted noise across every pane — sells the "this is material" feel */
+.pane::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background-image: var(--grain);
+  opacity: 0.07; mix-blend-mode: soft-light; pointer-events: none;
+}
+
+/* ── 7.  TOPBAR ──────────────────────────────────────────────────────── */
+
+.topbar {
+  grid-area: topbar;
+  display: grid; grid-template-columns: 1fr auto 1fr;
+  align-items: center; padding: 0 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(0,0,0,0.20));
+  border-bottom: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 var(--glass-edge-hi);
+  backdrop-filter: blur(12px);
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  cursor: pointer;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,0.5))
+          drop-shadow(0 0 8px color-mix(in srgb, var(--metal-hi) 18%, transparent));
+  transition: filter 280ms var(--ease-out);
+}
+.brand:hover { filter: drop-shadow(0 1px 0 rgba(0,0,0,0.5))
+                       drop-shadow(0 0 12px color-mix(in srgb, var(--metal-hi) 30%, transparent)); }
+.brand-mark { display: block; height: 32px; width: auto; }
+.topbar-left    { display: flex; align-items: center; justify-self: start; gap: 14px; }
+.topbar-center  { display: flex; gap: 8px; justify-self: center; }
+.topbar-actions { display: flex; gap: 6px; justify-self: end; align-items: center; }
+
+/* All inline SVG icons in the topbar share one stroke language —
+   thin warm gold line-art, round caps + joins. Color follows
+   currentColor so each button can theme the icon independently. */
+.ico {
+  width: 18px; height: 18px;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  flex-shrink: 0;
+}
+.ico-on-metal { color: var(--text-on-metal); stroke-width: 2; }
+
+/* ── context-window donut — larger, themed, with a halo when it
+   crosses 60% / 85% thresholds (calm → amber → urgent). Theme-aware:
+   the track inherits the pane vocabulary, the bar uses metal-hi. */
+.context-donut {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 38px;
+  padding: 0 14px 0 6px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--metal) 28%, transparent);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--metal-hi) 6%, transparent),
+    color-mix(in srgb, var(--metal-lo) 3%, transparent));
+  color: var(--metal-hi);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 240ms, border-color 240ms, box-shadow 240ms;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--metal-hi) 18%, transparent);
+}
+.context-donut:hover {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--metal-hi) 12%, transparent),
+    color-mix(in srgb, var(--metal-lo) 6%, transparent));
+}
+.donut-svg { width: 30px; height: 30px; display: block; transform: rotate(-90deg); }
+.donut-track {
+  stroke: color-mix(in srgb, var(--metal) 22%, transparent);
+  stroke-width: 3.4;
+  fill: none;
+}
+.donut-bar {
+  stroke: var(--active-strong);
+  stroke-width: 3.4;
+  stroke-linecap: round;
+  fill: none;
+  filter: drop-shadow(0 0 5px var(--active-soft));
+  transition: stroke-dasharray 520ms ease, stroke 360ms ease;
+}
+.donut-label { color: var(--text-etch); }
+/* threshold states */
+.context-donut[data-state="amber"]  .donut-bar { stroke: #e6a554; filter: drop-shadow(0 0 4px rgba(230, 165, 84, 0.55)); }
+.context-donut[data-state="urgent"] .donut-bar { stroke: #d97048; filter: drop-shadow(0 0 6px rgba(217, 112, 72, 0.65)); }
+
+/* When the donut lives in the composer row, center it vertically on
+   the input text — Attach/Send still stay at flex-end. */
+.composer-donut {
+  height: 40px;
+  padding: 0 14px 0 6px;
+  align-self: center;
+}
+.composer-donut .donut-svg { width: 32px; height: 32px; }
+
+/* ── primary action: "New" pill (matte brass) ─────────────────────
+   The previous icon-button + was invisible against the rest of the
+   actions. Promoting this to the matte hardware treatment makes it
+   the only thing on the bar that says "create" out loud. */
+.btn-newconv {
+  height: 38px;
+  min-width: 0;
+  padding: 0 14px;
+  gap: 6px;
+  border-radius: 999px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+}
+.btn-newconv .ico { width: 15px; height: 15px; }
+
+/* ── topbar icon buttons (search/queue/library/map) ───────────────
+   Soft circular pillows holding warm line-art icons. */
+.btn-icon {
+  width: 38px; height: 38px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: color-mix(in srgb, var(--metal-hi) 90%, var(--text-etch));
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--metal-hi) 6%, transparent),
+    rgba(0,0,0,0.18));
+  border: 1px solid color-mix(in srgb, var(--metal) 22%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--metal-hi) 20%, transparent),
+    0 1px 3px rgba(0,0,0,0.30);
+  cursor: pointer;
+  transition: background 240ms, border-color 240ms, transform 120ms;
+  position: relative;
+}
+.btn-icon:hover {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--metal-hi) 12%, transparent),
+    rgba(0,0,0,0.10));
+  border-color: color-mix(in srgb, var(--metal-hi) 45%, transparent);
+}
+.btn-icon:active { transform: translateY(1px); }
+
+/* small count badge on a topbar icon button */
+.btn-icon .badge {
+  position: absolute;
+  top: -3px; right: -3px;
+  min-width: 16px; height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #d8b34c, #a98318);
+  color: var(--text-on-metal);
+  font-size: 10px; font-weight: 700; line-height: 16px; text-align: center;
+  box-shadow: 0 0 0 2px var(--bg-1), 0 1px 2px rgba(0,0,0,0.5);
+}
+
+/* divider between actions and account */
+.topbar-divider {
+  width: 1px;
+  height: 24px;
+  margin: 0 6px;
+  background: linear-gradient(180deg,
+    transparent,
+    color-mix(in srgb, var(--metal) 35%, transparent),
+    transparent);
+}
+
+/* ── user bubble + dropdown ───────────────────────────────────────
+   Anchors the right end of the topbar; avatar + name + chevron.
+   Outline color reflects connection state via the data-conn-state
+   attribute (connected / reconnecting / offline). */
+.user-bubble {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 38px;
+  padding: 3px 12px 3px 4px;
+  border-radius: 999px;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--metal-hi) 6%, transparent),
+    rgba(0,0,0,0.18));
+  border: 1px solid color-mix(in srgb, var(--metal) 28%, transparent);
+  color: var(--text-etch);
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--metal-hi) 18%, transparent);
+  transition: background 240ms, border-color 240ms;
+}
+.user-bubble:hover {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--metal-hi) 12%, transparent),
+    rgba(0,0,0,0.10));
+}
+.user-bubble[data-conn-state="connected"]    { border-color: color-mix(in srgb, #6dc795 50%, var(--glass-border)); }
+.user-bubble[data-conn-state="reconnecting"] { border-color: color-mix(in srgb, #e6a554 55%, var(--glass-border)); }
+.user-bubble[data-conn-state="offline"]      { border-color: color-mix(in srgb, #d97048 55%, var(--glass-border)); }
+.user-bubble-avatar {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  background: radial-gradient(circle at 30% 28%, var(--metal-hi), var(--metal-lo) 70%, var(--metal-deep));
+  color: var(--text-on-metal);
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 600;
+  font-size: 14px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.30), 0 1px 2px rgba(0,0,0,0.55);
+}
+.user-bubble-name {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 14.5px;
+}
+.user-bubble-chev { width: 14px; height: 14px; opacity: 0.7; }
+
+.user-menu {
+  position: fixed;                       /* lifted out of topbar entirely */
+  top: 60px; right: 18px;
+  min-width: 240px;
+  padding: 10px;
+  border-radius: 18px;
+  background: #18130d !important;        /* hard-locked opaque */
+  background-image: none !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  isolation: isolate;
+  border: 1px solid color-mix(in srgb, var(--metal) 45%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--metal-hi) 22%, transparent),
+    0 16px 50px rgba(0,0,0,0.70),
+    0 0 40px color-mix(in srgb, var(--ambient-1) 35%, transparent);
+  z-index: 1000;
+  /* no entry animation — the previous one had `backwards` + only a
+     `from` keyframe, which can leave the element stuck at opacity:0
+     in some compositing paths. Plain show/hide instead. */
+}
+[data-theme="frosted"] .user-menu {
+  background: #0e1218 !important;
+}
+.user-menu[hidden] { display: none; }
+.user-menu-header {
+  display: grid; grid-template-columns: 40px 1fr; gap: 10px; align-items: center;
+  padding: 8px 10px 12px;
+}
+.user-menu-avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: radial-gradient(circle at 30% 28%, var(--metal-hi), var(--metal-lo) 70%, var(--metal-deep));
+  color: var(--text-on-metal);
+  font-family: var(--serif); font-style: italic; font-weight: 600; font-size: 17px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.30), 0 1px 2px rgba(0,0,0,0.55);
+}
+.user-menu-name { font-family: var(--serif); font-style: italic; font-size: 17px; font-weight: 500; }
+.user-menu-email { font-size: 12px; }
+.user-menu-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 10px 6px;
+  font-size: 12.5px;
+  color: var(--text-etch-soft);
+}
+.user-menu-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #6dc795;
+  box-shadow: 0 0 6px rgba(109, 199, 149, 0.65);
+}
+.user-menu-dot[data-state="reconnecting"] { background: #e6a554; box-shadow: 0 0 6px rgba(230,165,84,.65); }
+.user-menu-dot[data-state="offline"]      { background: #d97048; box-shadow: 0 0 6px rgba(217,112,72,.65); }
+.user-menu-sep {
+  height: 1px; margin: 6px 4px;
+  background: linear-gradient(90deg, transparent,
+    color-mix(in srgb, var(--metal) 35%, transparent), transparent);
+}
+.user-menu-item {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0; background: transparent;
+  color: var(--text-etch);
+  border-radius: 12px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 180ms;
+}
+.user-menu-item:hover {
+  background: color-mix(in srgb, var(--metal-hi) 10%, transparent);
+}
+.user-menu-item .ico { color: var(--metal-hi); }
+
+/* ────────────────────────────────────────────────────────────────
+   Discord-style profile modal — ported from prod (index.html
+   modal-profile + app.css .profile-*) with Cozy 2.0 treatment:
+   warm-dark opaque panel, big wax-seal avatar lifted over a warm
+   banner, serif italic name, pillow-card body sections.
+   Opened by clicking any specialist seal (left rail or main-head).
+   ──────────────────────────────────────────────────────────────── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  background: rgba(8, 6, 4, 0.65);
+  backdrop-filter: blur(4px) saturate(0.85);
+  -webkit-backdrop-filter: blur(4px) saturate(0.85);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  animation: backdrop-in 220ms ease forwards;
+}
+.modal-backdrop[hidden] { display: none; }
+@keyframes backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.profile-card {
+  width: 100%;
+  max-width: 560px;
+  max-height: calc(100dvh - 40px);
+  display: flex;
+  flex-direction: column;
+  background: #16110a;
+  border: 1px solid color-mix(in srgb, var(--metal) 40%, transparent);
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--metal-hi) 26%, transparent),
+    0 24px 80px rgba(0,0,0,0.75),
+    0 0 80px color-mix(in srgb, var(--ambient-1) 35%, transparent);
+  animation: profile-pop 320ms cubic-bezier(.2, .9, .3, 1.05) backwards;
+}
+[data-theme="frosted"] .profile-card { background: #0a1018; }
+@keyframes profile-pop {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+}
+
+.profile-close {
+  position: absolute;
+  top: 14px; right: 14px;
+  z-index: 5;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(0, 0, 0, 0.55);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 18px; line-height: 1;
+  cursor: pointer;
+  display: grid; place-items: center;
+  transition: background 180ms;
+}
+.profile-close:hover { background: rgba(0, 0, 0, 0.78); }
+
+/* Banner — real image from /app/api/banners/<id> as the BASE layer,
+   warm gold tint overlay so it matches the gilded room rather than
+   ever clashing. The per-specialist hue still tints the overlay so
+   each persona keeps a color identity. */
+.profile-banner {
+  position: relative;
+  height: 160px;
+  flex-shrink: 0;
+  background-color: #1a140d;
+  background-image: var(--banner-image, none);
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+}
+/* warm gold tint overlay (gilded) */
+.profile-banner::before {
+  content: "";
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(120% 100% at 80% 20%,
+      hsla(var(--banner-hue, 34), 70%, 55%, 0.32) 0%,
+      hsla(var(--banner-hue, 34), 60%, 35%, 0.18) 40%,
+      hsla(28, 50%, 12%, 0.55) 100%);
+  mix-blend-mode: soft-light;
+  pointer-events: none;
+}
+/* frosted theme: cool tint instead of warm */
+[data-theme="frosted"] .profile-banner::before {
+  background:
+    radial-gradient(120% 100% at 80% 20%,
+      hsla(210, 30%, 70%, 0.32) 0%,
+      hsla(210, 25%, 40%, 0.18) 40%,
+      hsla(220, 25%, 10%, 0.55) 100%);
+}
+/* warm darkening at the bottom so the lifted avatar reads cleanly */
+.profile-banner::after {
+  content: "";
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(180deg, transparent 50%, rgba(22, 17, 10, 0.55) 100%),
+    var(--grain);
+  background-blend-mode: normal;
+  opacity: 1;
+  mix-blend-mode: normal;
+  pointer-events: none;
+}
+
+/* Header row — the wax-seal avatar lifts over the banner edge,
+   identity floats to its right. */
+.profile-header {
+  position: relative;
+  padding: 0 24px;
+  display: flex;
+  align-items: flex-end;
+  gap: 18px;
+  margin-top: -56px;
+  flex-shrink: 0;
+  z-index: 2;
+}
+.profile-avatar-frame {
+  position: relative;
+  width: 116px; height: 116px;
+  border-radius: 50%;
+  padding: 6px;                          /* frame ring */
+  background: #16110a;
+  flex-shrink: 0;
+}
+[data-theme="frosted"] .profile-avatar-frame { background: #0a1018; }
+.profile-avatar-img {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  background: color-mix(in srgb, var(--metal-hi) 8%, #1a140d);
+  box-shadow:
+    0 4px 8px rgba(0,0,0,0.65),
+    0 0 14px color-mix(in srgb, var(--ambient-1) 50%, transparent);
+}
+
+/* Top-right overflow icon — tucked-away admin actions live here
+   (retire, archive memory, transfer, etc.). Quiet on purpose. */
+.profile-admin {
+  position: absolute;
+  top: 14px; right: 56px;       /* sits just left of the close ✕ */
+  z-index: 5;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(0, 0, 0, 0.45);
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  display: grid; place-items: center;
+  transition: background 180ms, color 180ms;
+}
+.profile-admin:hover { background: rgba(0, 0, 0, 0.7); color: var(--metal-hi); }
+.profile-admin .ico { width: 14px; height: 14px; stroke-width: 2; }
+
+.profile-identity {
+  padding-bottom: 14px;
+  min-width: 0;
+  flex: 1;
+}
+.profile-name {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 30px;
+  line-height: 1.1;
+  margin: 0;
+  letter-spacing: 0.005em;
+  color: var(--text-etch);
+}
+.profile-role {
+  font-size: 14px;
+  color: var(--text-etch-soft);
+  margin-top: 4px;
+}
+.profile-meta-line {
+  font-size: 12px;
+  color: var(--text-etch-soft);
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: center;
+}
+.profile-meta-line .sep { opacity: 0.4; }
+.profile-meta-line .state-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #6dc795;
+  box-shadow: 0 0 6px rgba(109, 199, 149, 0.55);
+  display: inline-block;
+}
+.profile-meta-line .state-dot[data-state="thinking"]   { background: var(--metal-hi); box-shadow: 0 0 8px var(--metal-hi); }
+.profile-meta-line .state-dot[data-state="flagged"]    { background: #e0a754; }
+.profile-meta-line .state-dot[data-state="quiet"]      { background: #7a7a72; opacity: 0.55; }
+
+/* Body — scrollable column of pillow-card sections. */
+.profile-body {
+  padding: 20px 24px 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 0;
+}
+.profile-body::-webkit-scrollbar { width: 8px; }
+.profile-body::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--metal-mid), var(--metal-lo));
+  border-radius: 4px;
+}
+.profile-section h3 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--text-etch-soft);
+}
+.profile-card-inner {
+  background:
+    linear-gradient(160deg,
+      color-mix(in srgb, var(--metal-hi) 5%, transparent),
+      rgba(0,0,0,0.20));
+  border: 1px solid color-mix(in srgb, var(--metal) 18%, transparent);
+  border-radius: 16px;
+  padding: 14px 16px;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--metal-hi) 18%, transparent);
+}
+.profile-persona {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--text-etch);
+  white-space: pre-wrap;
+}
+.profile-chips {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.profile-chip {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: var(--metal-hi);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--metal-hi) 12%, transparent),
+    color-mix(in srgb, var(--metal-lo) 5%, transparent));
+  border: 1px solid color-mix(in srgb, var(--metal) 30%, transparent);
+}
+.profile-list { display: flex; flex-direction: column; gap: 4px; }
+.profile-list-item {
+  display: grid;
+  grid-template-columns: 64px auto 1fr auto;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  transition: background 180ms;
+}
+.profile-list-item:hover {
+  background: color-mix(in srgb, var(--metal-hi) 6%, transparent);
+}
+.profile-list-item .ts {
+  font-size: 11px;
+  color: var(--text-etch-soft);
+  font-variant-numeric: tabular-nums;
+}
+.profile-list-item .kind {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--metal-hi);
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--metal-hi) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--metal) 25%, transparent);
+}
+.profile-list-item .text {
+  color: var(--text-etch);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.profile-list-item .status {
+  font-size: 11px;
+  color: var(--text-etch-soft);
+  font-style: italic;
+  font-family: var(--serif);
+}
+
+.profile-actions {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  margin-top: 4px;
+}
+
+@media (max-width: 720px) {
+  .modal-backdrop { padding: 0; }
+  .profile-card { max-height: 100dvh; border-radius: 0; border: 0; }
+  .profile-banner { height: 130px; }
+  .profile-header { margin-top: -44px; padding: 0 16px; }
+  .profile-avatar-frame { width: 92px; height: 92px; padding: 5px; }
+  .profile-avatar-frame .seal { width: 82px !important; height: 82px !important; }
+  .profile-avatar-frame .seal .letter { font-size: 34px !important; }
+  .profile-name { font-size: 24px; }
+  .profile-body { padding: 16px 16px 20px; }
+}
+
+/* theme toggle — a tiny segmented control */
+.theme-toggle {
+  display: inline-flex;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--glass-border);
+  background: rgba(0,0,0,0.30);
+  padding: 3px;
+  gap: 2px;
+}
+.theme-toggle button {
+  appearance: none; border: 0; cursor: pointer;
+  font: 600 11px/1 -apple-system, sans-serif;
+  letter-spacing: 0.10em; text-transform: uppercase;
+  padding: 7px 12px; border-radius: var(--radius-pill);
+  color: var(--text-etch-soft); background: transparent;
+  transition: color 180ms, background 180ms;
+}
+.theme-toggle button[aria-pressed="true"] {
+  color: var(--metal-ink);
+  background: linear-gradient(180deg, var(--metal-hi), var(--metal));
+  text-shadow: 0 1px 0 rgba(255,255,255,0.30);
+}
+
+/* ── 8.  LEFT RAIL: STAFF with WAX-SEAL SIGILS ──────────────────────── */
+
+.left {
+  grid-area: left;
+  margin: 12px 6px 12px 12px;
+  overflow: visible;            /* (9) consult thread overflows the rail */
+  display: flex; flex-direction: column;
+  padding-bottom: 8px;
+}
+.rail-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 14px 8px;
+}
+.rail-header .rail-title { padding: 0; }
+.rail-title {
+  padding: 14px 16px 8px;
+  font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--text-etch-soft);
+}
+
+/* "+ New" button in the rail header — small, warm, italic-serif
+   label. Reads as "start a fresh thread" in the same surface where
+   you already see your staff. */
+.rail-new {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 28px;
+  padding: 0 12px 0 8px;
+  border-radius: 999px;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--metal-hi) 14%, transparent),
+    color-mix(in srgb, var(--metal-lo)  7%, transparent));
+  border: 1px solid color-mix(in srgb, var(--metal) 35%, transparent);
+  color: var(--metal-hi);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--metal-hi) 28%, transparent),
+    0 1px 2px rgba(0,0,0,0.30);
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background 240ms, border-color 240ms, transform 120ms;
+}
+.rail-new:hover {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--metal-hi) 22%, transparent),
+    color-mix(in srgb, var(--metal-lo) 12%, transparent));
+  border-color: color-mix(in srgb, var(--metal-hi) 55%, transparent);
+}
+.rail-new:active { transform: translateY(1px); }
+.rail-new .ico { width: 13px; height: 13px; }
+.staff-list { list-style: none; margin: 0; padding: 6px; display: flex; flex-direction: column; gap: 2px; position: relative; }
+.staff {
+  display: grid; grid-template-columns: 44px 1fr; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer;
+  position: relative; transition: background 160ms ease;
+}
+.staff:hover { background: rgba(255,255,255,0.04); }
+.staff.active {
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--metal-hi) 12%, transparent),
+    transparent 70%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--metal-hi) 30%, transparent);
+}
+.staff.active::before {
+  content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px;
+  background: linear-gradient(180deg, var(--active-strong), hsl(var(--active-hue), 60%, 45%));
+  border-radius: 2px;
+  box-shadow: 0 0 10px var(--active-soft);
+}
+/* Wrap content collapses to its text width so the consult-thread JS
+   can anchor at the actual end of the name, not the grid cell. */
+.staff-meta { width: max-content; max-width: 100%; }
+.staff-name { font-weight: 600; font-family: var(--serif); font-size: 17px; letter-spacing: 0.01em; }
+.staff-role { font-size: 12px; color: var(--text-etch-soft); }
+
+/* (2 + 3) wax seal — SVG-shaped blob of wax with the staff initial
+   pressed into it. Slight rotation per-seal for organic feel.
+   Tone variants: 'fresh' (recent contact), 'aged' (mid-patina),
+   'lapsed' (visible cracks + dust). */
+.seal {
+  position: relative;
+  width: 44px; height: 44px;
+  display: grid; place-items: center;
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,0.45))
+          drop-shadow(0 0 8px color-mix(in srgb, var(--ambient-1) 35%, transparent));
+  animation: seal-breath 5.4s ease-in-out infinite;
+}
+/* Each seal breathes — a slow scale + drop-shadow pulse. The
+   --breath-offset custom property is set per-seal in JS so eight
+   seals don't pulse in unison; they feel like eight separate
+   people in the room. */
+@keyframes seal-breath {
+  0%, 100% { transform: scale(1.000); }
+  50%      { transform: scale(1.022); }
+}
+.seal { animation-delay: var(--breath-offset, 0s); }
+.seal svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.seal .wax { transform-origin: 50% 50%; }
+.seal[data-tone="fresh"]  .wax { transform: rotate(-6deg); }
+.seal[data-tone="aged"]   .wax { transform: rotate(3deg);  filter: saturate(0.7) brightness(0.85); }
+.seal[data-tone="lapsed"] .wax { transform: rotate(-2deg); filter: saturate(0.45) brightness(0.65); }
+
+/* the embossed letter — separate layer so we can use real text-shadow */
+.seal .letter {
+  position: relative; z-index: 2;
+  font-family: "Cinzel", "Trajan Pro", Georgia, serif;
+  font-weight: 700; font-size: 17px;
+  color: #2a0606;
+  text-shadow:
+    0 -1px 0 rgba(0,0,0,0.55),                       /* recess */
+    0 1px 0 rgba(255, 180, 180, 0.40);               /* lift */
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  user-select: none;
+}
+.seal[data-tone="lapsed"] .letter { color: #3a1010; opacity: 0.75; }
+
+/* dust patina overlay for lapsed seals */
+.seal[data-tone="lapsed"]::after {
+  content: ""; position: absolute; inset: 0;
+  background-image: var(--grain);
+  opacity: 0.45; mix-blend-mode: multiply; border-radius: 50%;
+  pointer-events: none;
+}
+
+/* ── 9.  CONSULT THREAD — embers carried in a gutter ────────────────
+   No rendered line. A soft stream of warm glowing motes drifts from
+   sender to receiver, routing through the gutter just outside the
+   pane's right edge so they never cross a name. The path itself
+   stays invisible (kept as a hidden trajectory for getPointAtLength);
+   only the motes are seen. Reads as breath, not as a graphic. */
+.consult-thread {
+  position: absolute;
+  top: 0; bottom: 0; left: 0;            /* right edge set in JS so SVG */
+  pointer-events: none;                  /* extends past the pane */
+  z-index: 1;
+  overflow: visible;
+}
+.thread-line {                            /* invisible trajectory */
+  fill: none;
+  stroke: transparent;
+  stroke-width: 0;
+}
+
+/* the motes — soft warm orbs. r + fill set per-particle in JS so
+   particles can carry their own life envelope. */
+.thread-mote {
+  fill: var(--active-strong);
+  opacity: 0;
+  filter: drop-shadow(0 0 4px var(--active-tint))
+          drop-shadow(0 0 9px var(--active-soft));
+  transition: none;
+}
+
+/* receiver glow — a soft warm breath that gathers onto the receiver
+   seal as motes arrive. Multiple pulses through the hold window. */
+.thread-recv {
+  r: 18;
+  fill: none;
+  stroke: var(--active-strong);
+  stroke-width: 1.0;
+  opacity: 0;
+  filter: drop-shadow(0 0 8px var(--active-tint));
+}
+.consult-thread.holding .thread-recv {
+  animation: recv-glow 2.6s ease-out forwards;
+}
+@keyframes recv-glow {
+  0%   { opacity: 0.0; r: 14; stroke-width: 1.8; }
+  35%  { opacity: 0.75; r: 22; stroke-width: 0.9; }
+  100% { opacity: 0;    r: 32; stroke-width: 0.3; }
+}
+
+/* (kind label removed — motion + receiver-name glow already say
+   "she's hearing from him"; a floating word in the rail was reading
+   as noise + occasionally clipped the pane.) */
+
+/* Receiver's name gets a soft warm glow while the thread runs.
+   This is the visual analog of "she heard you call."
+   The baseline carries a long text-shadow transition so when
+   .receiving is removed at the end of the consult, the glow eases
+   out over ~900ms rather than snapping off. */
+.staff-name {
+  transition: text-shadow 900ms var(--ease-out);
+}
+.staff-name.receiving {
+  text-shadow:
+    0 0 12px color-mix(in srgb, var(--metal-hi) 55%, transparent),
+    0 0 24px color-mix(in srgb, var(--metal-hi) 30%, transparent),
+    0 1px 0 rgba(0,0,0,0.45);
+  animation: name-recv-pulse 2.8s ease-in-out infinite;
+  transition: text-shadow 320ms var(--ease-out);   /* faster on add */
+}
+@keyframes name-recv-pulse {
+  0%, 100% { filter: brightness(1.00); }
+  50%      { filter: brightness(1.18); }
+}
+
+/* ── 10.  CENTER PANE: CONVERSATION ──────────────────────────────────── */
+
+.main {
+  grid-area: main;
+  margin: 12px 6px;
+  display: grid; grid-template-rows: auto 1fr auto;
+  overflow: hidden;
+}
+.main-head {
+  padding: 14px 20px;
+  border-bottom: 1px solid color-mix(in srgb, var(--metal) 20%, transparent);
+  display: flex; align-items: center; gap: 14px;
+}
+
+/* The center-rail head-trigger is the persona's clickable "she's here"
+   block. Hover surfaces the affordance: warm bg fade, the chevron
+   brightens, the avatar lifts a hair. Click opens the profile. */
+.head-trigger {
+  appearance: none; border: 0; padding: 8px 12px; margin: -8px -12px;
+  background: transparent;
+  display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0;
+  border-radius: 16px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit; color: inherit;
+  transition: background 200ms ease;
+}
+.head-trigger:hover,
+.head-trigger:focus-visible {
+  background: color-mix(in srgb, var(--metal-hi) 8%, transparent);
+  outline: none;
+}
+.head-trigger:hover .head-avatar,
+.head-trigger:focus-visible .head-avatar { transform: scale(1.04); }
+.head-trigger:hover .head-chev,
+.head-trigger:focus-visible .head-chev { opacity: 0.85; transform: translateX(2px); }
+.head-name-row {
+  display: flex; align-items: baseline; gap: 8px;
+}
+.head-chev {
+  width: 12px; height: 12px;
+  color: hsl(var(--active-hue), 60%, 72%);
+  opacity: 0;
+  transform: translateX(-2px);
+  transition: opacity 240ms var(--ease-out), transform 240ms var(--ease-out);
+}
+
+/* Center-rail avatar — real image from /app/api/avatars/<id>.
+   Wax seal stays in the left rail; here she gets a proper portrait. */
+.head-avatar {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: color-mix(in srgb, var(--metal-hi) 10%, #1a140d);
+  border: 1.5px solid color-mix(in srgb, var(--metal) 40%, transparent);
+  box-shadow:
+    0 2px 4px rgba(0,0,0,0.45),
+    0 0 12px color-mix(in srgb, var(--ambient-1) 35%, transparent);
+  transition: transform 240ms var(--ease-out);
+  flex-shrink: 0;
+}
+/* If the image fails to load, hide alt text — the warm background
+   circle remains so the layout doesn't jump. */
+.head-avatar[alt]:not([src]),
+.head-avatar:not([src]),
+.profile-avatar-img:not([src]) { color: transparent; }
+.head-avatar, .profile-avatar-img {
+  text-indent: -9999px;          /* alt text never paints if broken */
+}
+
+/* ── status row (the live state line under the specialist's name) ──
+   Reads at a glance: a state dot (idle/thinking/active/quiet), a verb,
+   then the deliberation cadence and a live countdown to next slot. */
+.status-row {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-etch-soft);
+}
+.status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--text-etch-soft);
+  flex: 0 0 7px;
+  position: relative;
+}
+.status-dot[data-state="ready"]     { background: #6dc795; box-shadow: 0 0 6px rgba(109, 199, 149, 0.55); }
+.status-dot[data-state="thinking"]  { background: var(--metal-hi);
+                                       box-shadow: 0 0 8px var(--metal-hi);
+                                       animation: dot-think 1.4s ease-in-out infinite; }
+.status-dot[data-state="consulting"]{ background: var(--metal); box-shadow: 0 0 6px var(--metal);
+                                       animation: dot-think 1.2s ease-in-out infinite; }
+.status-dot[data-state="flagged"]   { background: #e0a754; box-shadow: 0 0 6px #e0a754; }
+.status-dot[data-state="quiet"]     { background: #7a7a72; opacity: 0.55; }
+@keyframes dot-think {
+  0%, 100% { transform: scale(1);    opacity: 1; }
+  50%      { transform: scale(1.35); opacity: 0.55; }
+}
+.status-text   { font-weight: 600; color: var(--text-etch); text-transform: capitalize; }
+.status-sep    { opacity: 0.4; }
+.status-meta   { white-space: nowrap; }
+.countdown {
+  display: inline-block;
+  padding: 1px 6px;
+  margin-left: 4px;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--metal-hi) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--metal) 28%, transparent);
+  color: var(--metal-hi);
+}
+.countdown.imminent {                 /* < 5 min */
+  background: color-mix(in srgb, var(--metal-hi) 24%, transparent);
+  animation: countdown-pulse 1.6s ease-in-out infinite;
+}
+@keyframes countdown-pulse {
+  50% { box-shadow: 0 0 10px color-mix(in srgb, var(--metal-hi) 40%, transparent); }
+}
+
+/* flag pill at the right of the head — shows pending proposal count */
+.flag-pill { text-transform: lowercase; letter-spacing: 0.04em; }
+.flag-pill[data-count="0"] { opacity: 0.45; }
+.flag-pill[data-count]:not([data-count="0"]) {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--metal-hi) 28%, transparent),
+    color-mix(in srgb, var(--metal-lo) 14%, transparent));
+  color: var(--metal-hi);
+}
+
+/* Trust/confidence meter — surface hidden until the underlying value
+   is computed dynamically (provenance + freshness + LLM self-report).
+   Plumbing stays so we can flip a single display rule when the
+   backend lands. See PLAN.md "trust-meter dynamic". */
+.trust-meter {
+  display: none;                /* hidden — plumbing kept */
+  align-items: center; gap: 8px;
+  height: 28px;
+  padding: 0 12px 0 10px;
+  border-radius: 999px;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--metal-hi) 5%, transparent),
+    rgba(0,0,0,0.15));
+  border: 1px solid color-mix(in srgb, var(--metal) 22%, transparent);
+  font-size: var(--text-caption);
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--text-etch-soft);
+  cursor: help;
+}
+.trust-meter.poc-show {         /* dev preview — toggle in console */
+  display: inline-flex;
+}
+.trust-bars {
+  display: inline-flex; align-items: flex-end; gap: 2px;
+}
+.trust-bars span {
+  width: 3px;
+  border-radius: 1.5px;
+  background: rgba(255, 255, 255, 0.18);
+  transition: background 320ms var(--ease-out), box-shadow 320ms var(--ease-out);
+}
+.trust-bars span:nth-child(1) { height: 7px; }
+.trust-bars span:nth-child(2) { height: 11px; }
+.trust-bars span:nth-child(3) { height: 15px; }
+
+.trust-meter[data-trust="high"] .trust-bars span {
+  background: var(--active-strong);
+  box-shadow: 0 0 4px var(--active-soft);
+}
+.trust-meter[data-trust="high"] .trust-text  { color: var(--metal-hi); }
+
+.trust-meter[data-trust="medium"] .trust-bars span:nth-child(-n+2) {
+  background: var(--active-strong);
+}
+.trust-meter[data-trust="medium"] .trust-text { color: var(--text-etch); }
+
+.trust-meter[data-trust="low"] .trust-bars span:nth-child(1) {
+  background: #e6a554;
+  box-shadow: 0 0 4px rgba(230, 165, 84, 0.45);
+}
+.trust-meter[data-trust="low"]  .trust-text  { color: #e6a554; }
+
+/* "when-stamp" — the per-bubble deliberation marker beside the
+   specialist's name. Quiet by default; reads as provenance, not as
+   chrome. */
+.when-stamp {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--text-etch-soft);
+  background: rgba(0,0,0,0.30);
+  border: 1px solid color-mix(in srgb, var(--metal) 16%, transparent);
+  vertical-align: 2px;
+}
+.when-stamp.brief { color: var(--metal-hi);
+                    border-color: color-mix(in srgb, var(--metal) 35%, transparent); }
+/* Scope view transitions to ONLY the per-specialist identity bits.
+   The conversation itself doesn't morph; that kept the previous
+   transition heavy + sloshy. The seal, name+role block, and the
+   right-side status badge each animate independently. */
+.head-seal     { view-transition-name: head-seal; }
+.head-identity { view-transition-name: head-identity; }
+.head-status   { view-transition-name: head-status; }
+
+.convo {
+  overflow: auto;
+  padding: var(--space-4) var(--space-5);
+  display: flex; flex-direction: column; gap: var(--space-3);
+  position: relative;
+}
+/* (Tier 3 #13) Subtle vertical paper texture on the conversation
+   surface that scrolls at a different speed than content (parallax).
+   Background fixed → content scrolls past it. Adds tactility without
+   competing with the bubbles. */
+.convo::before {
+  content: "";
+  position: absolute; inset: 0;
+  background-image:
+    repeating-linear-gradient(180deg,
+      transparent 0px, transparent 28px,
+      color-mix(in srgb, var(--metal-hi) 4%, transparent) 28px,
+      color-mix(in srgb, var(--metal-hi) 4%, transparent) 29px);
+  background-attachment: local;       /* moves with content half-speed */
+  opacity: 0.4;
+  pointer-events: none;
+  z-index: 0;
+}
+.convo > * { position: relative; z-index: 1; }
+
+/* Empty conversation state — big portrait, italic greeting in her
+   voice, fades the moment the first bubble lands. */
+.empty-convo {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  text-align: center;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  opacity: 0.92;
+  transition: opacity 320ms var(--ease-out);
+}
+.empty-convo[hidden] { display: none; }
+.empty-convo-portrait {
+  width: 180px; height: 180px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: color-mix(in srgb, var(--metal-hi) 8%, #1a140d);
+  border: 1.5px solid color-mix(in srgb, var(--active-strong) 30%, transparent);
+  box-shadow:
+    0 8px 24px rgba(0,0,0,0.55),
+    0 0 60px var(--active-soft);
+}
+.empty-convo-greeting {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: var(--text-display);
+  font-weight: 400;
+  color: var(--text-etch);
+  letter-spacing: 0.005em;
+  max-width: 32ch;
+  line-height: var(--lh-tight);
+}
+.empty-convo-sub {
+  font-size: var(--text-body-sm);
+  color: var(--text-etch-soft);
+  font-style: italic;
+}
+.convo::-webkit-scrollbar { width: 10px; }
+.convo::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--metal-mid), var(--metal-lo));
+  border-radius: 5px;
+}
+
+/* ── 11.  CHAT BUBBLES ─ pillowy, speaker-hued ────────────────────
+   Each bubble carries a --bubble-hue (set inline from the speaker
+   id in JS). The inner glow + outer halo read from that hue, so a
+   conversation with Vivian + Eleanor shows two distinct color
+   identities side by side. */
+.bubble {
+  --bubble-hue: var(--active-hue);
+  --bubble-strong: hsl(var(--bubble-hue), 65%, 65%);
+  --bubble-soft:   hsla(var(--bubble-hue), 55%, 60%, 0.18);
+  --bubble-faint:  hsla(var(--bubble-hue), 50%, 55%, 0.08);
+  max-width: 80%;
+  padding: 16px 20px;
+  border-radius: 26px;
+  position: relative;
+  background: linear-gradient(160deg, rgba(255,255,255,0.045), rgba(0,0,0,0.20));
+  border: 1px solid color-mix(in srgb, var(--metal) 16%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--metal-hi) 22%, transparent),
+    inset 0 -2px 6px rgba(0,0,0,0.18),
+    0 2px 6px rgba(0,0,0,0.20),
+    0 12px 28px rgba(0,0,0,0.30);
+  line-height: 1.55;
+}
+.bubble.assistant {
+  background: linear-gradient(160deg,
+    hsla(var(--bubble-hue), 55%, 60%, 0.10),
+    color-mix(in srgb, var(--metal-lo) 3%, transparent));
+  border-color: color-mix(in srgb, var(--bubble-strong) 32%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--bubble-strong) 36%, transparent),
+    inset 0 0 50px var(--bubble-faint),
+    0 2px 8px rgba(0,0,0,0.22),
+    0 16px 36px rgba(0,0,0,0.34),
+    0 0 32px var(--bubble-soft);
+}
+
+/* (Tier 3 #11) The most recent assistant bubble "breathes" — a slow
+   pulse on the inner glow for ~3s after she's done speaking, like
+   she's listening for your reply. Applied via .listening class. */
+.bubble.assistant.listening {
+  animation: bubble-listen 2.8s ease-in-out 3;
+}
+@keyframes bubble-listen {
+  0%, 100% { box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--bubble-strong) 36%, transparent),
+    inset 0 0 50px var(--bubble-faint),
+    0 2px 8px rgba(0,0,0,0.22), 0 16px 36px rgba(0,0,0,0.34),
+    0 0 32px var(--bubble-soft); }
+  50%      { box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--bubble-strong) 50%, transparent),
+    inset 0 0 70px hsla(var(--bubble-hue), 55%, 60%, 0.16),
+    0 2px 8px rgba(0,0,0,0.22), 0 16px 36px rgba(0,0,0,0.34),
+    0 0 48px hsla(var(--bubble-hue), 55%, 60%, 0.30); }
+}
+
+/* (Tier 3 #12) Provenance glyph in the bubble metadata — a tiny SVG
+   shows where this fact came from: vault delta / inbox / memory. */
+.who-provenance {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-etch-soft);
+  margin-left: 6px;
+  padding: 1px 6px 1px 4px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--metal) 18%, transparent);
+  background: rgba(0,0,0,0.20);
+  font-style: normal;
+  font-family: -apple-system, sans-serif;
+}
+.who-provenance .ico { width: 11px; height: 11px; stroke-width: 1.8; }
+.who-provenance[data-prov="vault"]  { color: hsl(140, 50%, 70%); border-color: hsla(140, 40%, 60%, 0.30); }
+.who-provenance[data-prov="inbox"]  { color: hsl(34, 60%, 70%);  border-color: hsla(34, 50%, 60%, 0.30); }
+.who-provenance[data-prov="memory"] { color: hsl(0, 0%, 65%);    border-color: hsla(0, 0%, 50%, 0.30); opacity: 0.78; }
+.bubble.user {
+  align-self: flex-end;
+  background: linear-gradient(160deg,
+    rgba(255, 248, 232, 0.030),
+    rgba(60, 42, 18, 0.20));
+}
+
+/* The "who" line — intimate, serif italic, as if addressing someone
+   you love. Lowercase first letter intentional via text-transform. */
+.bubble .who {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 14.5px;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: color-mix(in srgb, var(--metal-hi) 85%, var(--text-etch));
+  margin-bottom: 6px;
+  opacity: 0.92;
+  display: flex; align-items: baseline; gap: 6px;
+}
+.bubble .who::before {
+  content: "—";
+  font-style: normal;
+  opacity: 0.55;
+  font-weight: 300;
+}
+.bubble p {
+  margin: 0;
+  color: var(--text-etch);
+  text-shadow: 0 1px 0 rgba(0,0,0,0.40);
+  font-size: var(--text-body);
+}
+
+/* ── Reactions ───────────────────────────────────────────────────
+   Hover a bubble → small picker fades in just outside the bubble's
+   bottom edge. Click a glyph to stick it as a wax-seal chip on the
+   bubble corner. */
+.bubble { padding-bottom: 20px; }            /* extra room for chips */
+.reactions {
+  position: absolute;
+  bottom: -14px;
+  display: flex; gap: 4px;
+  pointer-events: none;            /* live chips don't catch hover */
+}
+.bubble.assistant .reactions { left: 12px; }
+.bubble.user      .reactions { right: 12px; }
+/* Wax-pill chip — embossed glyph on red wax, theme-stable. */
+.reaction-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #d44545, #7a1414);
+  border: 1px solid rgba(255, 200, 200, 0.30);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 200, 200, 0.45),
+    0 2px 4px rgba(0,0,0,0.50);
+  color: #fff1f1;
+  font-size: var(--text-caption);
+  font-weight: 700;
+  pointer-events: auto;
+}
+.reaction-chip .ico {
+  width: 13px; height: 13px;
+  stroke: none; fill: currentColor;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,0.45));
+}
+.reaction-count { font-variant-numeric: tabular-nums; }
+
+/* Floating picker — theme-aware solid panel with high-contrast glyphs. */
+.reaction-picker {
+  position: absolute;
+  bottom: -36px;
+  display: flex; gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #18130d;
+  border: 1px solid color-mix(in srgb, var(--metal) 40%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--metal-hi) 22%, transparent),
+    0 8px 24px rgba(0,0,0,0.70);
+  opacity: 0;
+  transform: translateY(-4px) scale(0.92);
+  pointer-events: none;
+  transition: opacity 180ms var(--ease-out), transform 220ms var(--ease-out);
+  z-index: 20;
+}
+[data-theme="frosted"] .reaction-picker { background: #0e1218; }
+.bubble.assistant .reaction-picker { left: 14px; }
+.bubble.user      .reaction-picker { right: 14px; }
+.bubble:hover .reaction-picker {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+.reaction-pick-btn {
+  width: 28px; height: 28px;
+  border-radius: 50%; border: 0;
+  background: transparent;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: transform 140ms var(--ease-out), background 140ms;
+  /* Theme-tuned color: warm cream on gilded, cool white on frosted. */
+  color: #ffe7c0;
+}
+[data-theme="frosted"] .reaction-pick-btn { color: #eaf2ff; }
+.reaction-pick-btn .ico {
+  width: 16px; height: 16px;
+  stroke: none; fill: currentColor;
+}
+.reaction-pick-btn:hover {
+  background: color-mix(in srgb, var(--metal-hi) 18%, transparent);
+  transform: scale(1.15);
+  color: var(--metal-hi);
+}
+
+/* Inline "what didn't work?" field — opens below the bubble on
+   thumbs-down. Free-text becomes the training note. */
+.feedback-down-field {
+  position: absolute;
+  bottom: -52px;
+  left: 12px; right: 12px;
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px;
+  border-radius: 12px;
+  background: #18130d;
+  border: 1px solid color-mix(in srgb, var(--metal) 38%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--metal-hi) 22%, transparent),
+    0 8px 24px rgba(0,0,0,0.65);
+  z-index: 22;
+}
+[data-theme="frosted"] .feedback-down-field { background: #0e1218; }
+.feedback-down-prompt {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: var(--text-body-sm);
+  color: var(--text-etch-soft);
+  padding-left: 6px;
+  white-space: nowrap;
+}
+.feedback-down-field input {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: var(--text-body-sm);
+  color: var(--text-etch);
+  outline: none;
+}
+.feedback-down-field input::placeholder { color: var(--text-etch-soft); font-style: italic; }
+
+/* Multi-choice options — same shape language as the qset pattern in
+   prod (small pill buttons, "Other…" morphs to a text input). */
+.qset-options {
+  flex: 1;
+  display: flex; flex-wrap: wrap; gap: 4px;
+}
+.qset-opt {
+  appearance: none; border: 0;
+  font: inherit; font-size: var(--text-body-sm); font-weight: 500;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--metal-hi) 10%, transparent);
+  color: var(--text-etch);
+  border: 1px solid color-mix(in srgb, var(--metal) 28%, transparent);
+  cursor: pointer;
+  transition: background 160ms, border-color 160ms, color 160ms;
+  white-space: nowrap;
+}
+.qset-opt:hover {
+  background: var(--active-soft);
+  border-color: color-mix(in srgb, var(--active-strong) 45%, transparent);
+  color: var(--metal-hi);
+}
+.feedback-down-save,
+.feedback-down-skip {
+  appearance: none; border: 0;
+  height: 26px; padding: 0 10px;
+  border-radius: 999px;
+  font: inherit; font-size: var(--text-caption); font-weight: 700;
+  cursor: pointer;
+}
+.feedback-down-save {
+  background: var(--active-soft);
+  color: var(--metal-hi);
+  border: 1px solid color-mix(in srgb, var(--active-strong) 45%, transparent);
+}
+.feedback-down-save:hover { background: var(--active-strong); color: var(--text-on-metal); }
+.feedback-down-skip {
+  background: transparent;
+  color: var(--text-etch-soft);
+  width: 26px; padding: 0;
+}
+
+/* ── 12.  (7) STREAMING TEXT — glyphs rise through the surface ───────
+   Each glyph is a span with a per-character delay set in JS. Words
+   advance with a natural ~22ms/char cadence; punctuation gets a
+   real pause (commas, periods) so the rhythm matches reading.
+
+   Visual: glyph starts dim, warm-tinted, below baseline, and slightly
+   blurred — as if it's surfacing through the metal. Lifts into the
+   bright etched color over ~360ms.
+
+   The keyframes name the colors via custom properties so the
+   gilded/frosted themes get the right "ink-setting" tint without
+   any JS theme branching. */
+.stream {
+  --stream-from-color: color-mix(in srgb, var(--metal-mid) 70%, var(--text-etch));
+  --stream-to-color:   var(--text-etch);
+}
+.stream span {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(0.34em);
+  filter: blur(3px);
+  color: var(--stream-from-color);
+  animation: glyph-rise 360ms cubic-bezier(.25, .9, .3, 1) forwards;
+  animation-delay: var(--d, 0ms);
+  /* keep word breaks honest — spans are inline-block which would
+     normally break wherever they fit */
+  white-space: pre;
+}
+@keyframes glyph-rise {
+  60%  { color: color-mix(in srgb,
+                  var(--stream-from-color) 30%,
+                  var(--stream-to-color)); }
+  100% { opacity: 1;
+         transform: translateY(0);
+         filter: blur(0);
+         color: var(--stream-to-color); }
+}
+/* Cursor element — a real <span> the JS reparents to ride the
+   leading edge of the reveal wave. Not a ::after pseudo (which sits
+   at the end of the box regardless of where text has appeared). */
+.stream-cursor {
+  display: inline-block;
+  width: 0.4em; height: 1em;
+  margin: 0 -0.03em;
+  vertical-align: text-bottom;
+  background: linear-gradient(180deg,
+    transparent 8%,
+    var(--metal-hi) 60%,
+    transparent 92%);
+  opacity: 0.55;
+  animation: stream-cursor 600ms steps(2) infinite;
+  transition: none;
+}
+.stream.done .stream-cursor { display: none; }
+@keyframes stream-cursor {
+  50% { opacity: 0.05; }
+}
+
+/* ── 13.  COMPOSER ─ warm notebook page in your lap ──────────────── */
+
+.composer {
+  padding: 16px 22px 22px;
+  border-top: 1px solid color-mix(in srgb, var(--metal) 14%, transparent);
+  display: flex; gap: 12px; align-items: center;   /* all controls vertically centered on the input */
+}
+.input {
+  flex: 1;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--metal-hi) 4%, rgba(0,0,0,0.40)),
+    color-mix(in srgb, var(--metal-hi) 1%, rgba(0,0,0,0.55)));
+  border: 1px solid color-mix(in srgb, var(--metal) 22%, transparent);
+  border-radius: 20px;            /* notebook-rounded, not chip-flat */
+  padding: 14px 18px;
+  color: var(--text-etch);
+  resize: none;
+  min-height: 52px;
+  max-height: 200px;
+  font-size: 15.5px;
+  line-height: 1.55;
+  font-family: var(--serif);
+  font-style: italic;
+  box-shadow:
+    inset 0 1px 0 rgba(0,0,0,0.35),
+    inset 0 -1px 0 color-mix(in srgb, var(--metal-hi) 16%, transparent),
+    inset 0 0 30px color-mix(in srgb, var(--metal-hi) 4%, transparent);
+  outline: none;
+  transition: border-color 320ms ease, box-shadow 320ms ease, background 320ms ease;
+}
+.input::placeholder {
+  color: var(--text-etch-soft);
+  font-style: italic;
+}
+.input:focus {
+  border-color: color-mix(in srgb, var(--metal-hi) 50%, transparent);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--metal-hi) 7%, rgba(0,0,0,0.30)),
+    color-mix(in srgb, var(--metal-hi) 3%, rgba(0,0,0,0.45)));
+  box-shadow:
+    inset 0 1px 0 rgba(0,0,0,0.30),
+    inset 0 0 40px color-mix(in srgb, var(--metal-hi) 10%, transparent),
+    0 0 0 4px color-mix(in srgb, var(--metal-hi) 12%, transparent),
+    0 0 30px color-mix(in srgb, var(--ambient-1) 40%, transparent);
+}
+
+/* ── 14.  RIGHT RAIL: BRIEF + PROPOSAL (expanding card + seal press) ── */
+
+.right {
+  grid-area: right;
+  margin: 12px 12px 12px 6px;
+  overflow: auto;
+  padding: 16px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.card {
+  padding: 14px 16px; border-radius: var(--radius-sm);
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--metal-hi) 5%, transparent),
+    rgba(0,0,0,0.18));
+  border: 1px solid color-mix(in srgb, var(--metal) 22%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--metal-hi) 18%, transparent),
+    0 2px 8px rgba(0,0,0,0.4);
+}
+.card h3 {
+  margin: 0 0 8px;
+  font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--metal-hi); font-weight: 600;
+}
+.brief-line {
+  padding: 6px 0;
+  border-bottom: 1px dashed color-mix(in srgb, var(--metal) 15%, transparent);
+  font-size: 14px;
+}
+.brief-line:last-child { border-bottom: 0; }
+
+/* (10) the proposal expand uses interpolate-size + a height transition.
+   No JS measurement — the keyword `auto` is interpolatable now. */
+.proposal-detail {
+  height: 0;
+  overflow: hidden;
+  transition: height 380ms cubic-bezier(.2,.7,.2,1),
+              opacity 280ms ease;
+  opacity: 0;
+}
+.proposal.open .proposal-detail {
+  height: auto;
+  opacity: 1;
+}
+.proposal-detail-inner { padding-top: 12px; color: var(--text-etch-soft); font-size: 13px; }
+
+/* (3) approval seal-press — choreographed in three beats:
+     1. drop:    seal falls from above, scaled-up + blurred, rotating in
+     2. impact:  squash (wider, shorter) on contact; a radial wax-spread
+                 halo flashes outward from the strike point
+     3. settle:  rebounds to neutral; a permanent inset shadow appears
+                 on the card so the seal looks pressed *into* it, not
+                 stamped on top
+   Triggered by toggling .sealed on .proposal. */
+.seal-press {
+  position: absolute;
+  top: -14px; right: -10px;
+  width: 60px; height: 60px;
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(2.4) rotate(-22deg);
+  transform-origin: 50% 70%;
+  z-index: 3;
+}
+/* halo — the wax-spread pulse on impact */
+.seal-press::before {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle,
+    rgba(255, 180, 130, 0.55) 0%,
+    rgba(180, 60, 40, 0.20) 40%,
+    transparent 70%);
+  opacity: 0;
+  transform: scale(0.6);
+  pointer-events: none;
+}
+.proposal.sealed .seal-press {
+  animation: seal-drop 760ms cubic-bezier(.18, 1.2, .3, 1) forwards;
+}
+.proposal.sealed .seal-press::before {
+  animation: seal-halo 700ms ease-out 320ms forwards;
+}
+/* card itself gets a subtle press-in shadow once sealed, so the
+   seal reads as embossed into the surface, not floating */
+.proposal.sealed {
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--metal-hi) 18%, transparent),
+    inset -2px -2px 18px rgba(0,0,0,0.30),
+    inset 18px 14px 36px rgba(0,0,0,0.10),
+    0 2px 8px rgba(0,0,0,0.4);
+  transition: box-shadow 380ms ease 380ms;
+}
+@keyframes seal-drop {
+  /*  fall in from above, blurred */
+  0%   { opacity: 0; transform: scale(2.6) rotate(-26deg) translateY(-12px); filter: blur(6px); }
+  35%  { opacity: 1; transform: scale(1.4) rotate(-18deg) translateY(-3px); filter: blur(1.5px); }
+  /*  impact — squashed wider than tall */
+  46%  { opacity: 1; transform: scale(1.15, 0.86) rotate(-15deg) translateY(0); filter: blur(0); }
+  /*  micro-rebound */
+  62%  { transform: scale(0.96, 1.04) rotate(-13deg); }
+  78%  { transform: scale(1.02, 0.99) rotate(-14deg); }
+  /*  settled */
+  100% { opacity: 1; transform: scale(1) rotate(-14deg); }
+}
+@keyframes seal-halo {
+  0%   { opacity: 0;   transform: scale(0.55); }
+  20%  { opacity: 0.95; transform: scale(0.95); }
+  100% { opacity: 0;   transform: scale(2.1); }
+}
+
+/* ── 15.  PILLS & BADGES ─────────────────────────────────────────────── */
+
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px;
+  font-size: 11px; letter-spacing: 0.10em; text-transform: uppercase;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--metal-hi) 18%, transparent),
+    color-mix(in srgb, var(--metal-lo) 10%, transparent));
+  border: 1px solid color-mix(in srgb, var(--metal) 40%, transparent);
+  color: var(--metal-hi);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--metal-hi) 25%, transparent);
+}
+.pill.dot::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--metal-hi);
+  box-shadow: 0 0 6px var(--metal-hi);
+}
+
+/* ── 16.  BUTTONS ────────────────────────────────────────────────────── */
+
+.btn {
+  appearance: none; border: 0; cursor: pointer; font: inherit;
+  font-weight: 600; letter-spacing: 0.04em;
+  /* Uniform metrics for every button variant so primary/secondary
+     differ in WEIGHT (matte vs glass) but never in SIZE. */
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 40px; min-width: 96px;
+  padding: 0 18px;
+  border-radius: 14px;
+  line-height: 1;
+  transition: transform 120ms ease, filter 240ms ease, box-shadow 240ms ease,
+              background 240ms ease;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.btn:active { transform: translateY(1px); }
+
+/* matte metal — primary action */
+.btn-matte {
+  color: var(--text-on-metal);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--metal-hi) 80%, white) 0%,
+      var(--metal) 55%,
+      var(--metal-lo) 100%);
+  border: 1px solid color-mix(in srgb, var(--metal-hi) 55%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--metal-hi) 55%, white),
+    inset 0 -1px 0 rgba(0,0,0,0.40),
+    0 1px 2px rgba(0,0,0,0.50),
+    0 6px 16px color-mix(in srgb, var(--metal-mid) 30%, transparent);
+  text-shadow:
+    0 1px 0 color-mix(in srgb, var(--metal-hi) 40%, transparent),
+    0 -1px 0 rgba(0,0,0,0.35);
+}
+.btn-matte::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background-image: var(--grain-bright);
+  opacity: 0.35; mix-blend-mode: overlay; pointer-events: none;
+}
+.btn-matte:hover { filter: brightness(1.06); }
+
+/* glass — secondary action */
+.btn-glass {
+  color: var(--metal-hi);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--metal-hi) 10%, transparent),
+      color-mix(in srgb, var(--metal-lo) 4%, transparent));
+  border: 1px solid color-mix(in srgb, var(--metal) 38%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--metal-hi) 25%, transparent),
+    0 1px 2px rgba(0,0,0,0.30);
+  text-shadow: 0 1px 0 rgba(0,0,0,0.45);
+}
+.btn-glass:hover {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--metal-hi) 16%, transparent),
+    color-mix(in srgb, var(--metal-lo) 8%, transparent));
+  border-color: color-mix(in srgb, var(--metal-hi) 55%, transparent);
+}
+
+.btn-icon {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: grid; place-items: center;
+  color: var(--metal-hi);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--metal-hi) 8%, transparent),
+    rgba(0,0,0,0.25));
+  border: 1px solid color-mix(in srgb, var(--metal) 30%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--metal-hi) 20%, transparent);
+}
+
+/* ── 17.  ETCHED TYPE ────────────────────────────────────────────────── */
+
+.etched {
+  color: var(--text-etch);
+  text-shadow:
+    0 1px 0 rgba(0,0,0,0.65),
+    0 -1px 0 color-mix(in srgb, var(--metal-hi) 22%, transparent);
+}
+.etched-deep {
+  color: color-mix(in srgb, var(--metal-hi) 78%, var(--text-etch));
+  text-shadow:
+    0 1px 0 rgba(0,0,0,0.55),
+    0 0 20px color-mix(in srgb, var(--metal-hi) 18%, transparent);
+  letter-spacing: 0.005em;
+}
+/* Active specialist's display name: serif italic, warmly written,
+   as you'd address her. */
+#active-name {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 22px !important;
+  letter-spacing: 0.005em;
+}
+
+/* ── 18.  DEMO CALLOUTS — small annotations on each new mechanic ─────
+   These are POC-only; remove when promoting to the real theme. */
+.callout {
+  position: absolute;
+  font-size: 10px; letter-spacing: 0.10em; text-transform: uppercase;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(0,0,0,0.7);
+  color: var(--metal-hi);
+  border: 1px solid color-mix(in srgb, var(--metal) 40%, transparent);
+  white-space: nowrap;
+  z-index: 5;
+  pointer-events: none;
+}
+.callout.tl { top: -10px; left: 8px; }
+.callout.tr { top: -10px; right: 8px; }
+.callout.bl { bottom: -10px; left: 8px; }
+
+/* ── 19.  UTILITIES ──────────────────────────────────────────────────── */
+.muted { color: var(--text-etch-soft); }
+.row   { display: flex; gap: 8px; align-items: center; }
+.grow  { flex: 1; }
+.gap-sm{ gap: 6px; }
+.center{ display: grid; place-items: center; }
+
+/* ── 20.  (8) VIEW TRANSITIONS — restrained, opacity-only ─────────────
+   Lesson from v1: blur+translate+scale on a view transition is too
+   much movement at small sizes — it reads as "the UI fell over."
+   Restrained crossfade in ~220ms feels native; the eye barely
+   registers the swap, only the result. */
+::view-transition-old(head-seal),
+::view-transition-new(head-seal),
+::view-transition-old(head-identity),
+::view-transition-new(head-identity),
+::view-transition-old(head-status),
+::view-transition-new(head-status) {
+  animation-duration: 240ms;
+  animation-timing-function: cubic-bezier(.4, 0, .2, 1);
+}
+/* Stagger the parts so it feels human-paced, not stamped. */
+::view-transition-old(head-seal),
+::view-transition-new(head-seal) { animation-delay: 0ms; }
+::view-transition-old(head-identity),
+::view-transition-new(head-identity) { animation-delay: 30ms; }
+::view-transition-old(head-status),
+::view-transition-new(head-status) { animation-delay: 60ms; }
+
+.proposal { position: relative; }
+
+/* ── Stub views for View Transitions (Tier 3 #15) ─────────────────
+   Pretend Library + Settings panels that the conversation morphs
+   into when those topbar buttons are clicked. They share the .main
+   pane geometry so the transition feels like a single object
+   changing state, not a route change. */
+.stub-view {
+  view-transition-name: main-view;       /* same name = morph between */
+  padding: var(--space-5);
+  overflow: auto;
+  display: flex; flex-direction: column; gap: var(--space-4);
+}
+.stub-view[hidden] { display: none; }
+.stub-view h2 {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: var(--text-display);
+  margin: 0 0 var(--space-2);
+  color: var(--text-etch);
+}
+.stub-view-card {
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius);
+  background: linear-gradient(160deg,
+    color-mix(in srgb, var(--metal-hi) 5%, transparent),
+    rgba(0,0,0,0.18));
+  border: 1px solid color-mix(in srgb, var(--metal) 22%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--metal-hi) 18%, transparent);
+}
+.main .convo,
+.main .composer { view-transition-name: main-view; }
+
+::view-transition-old(main-view),
+::view-transition-new(main-view) {
+  animation-duration: 340ms;
+  animation-timing-function: var(--ease-out);
+}
+
+/* ── Demo control panel ────────────────────────────────────────── */
+.demo-panel {
+  position: fixed;
+  bottom: 14px; right: 14px;
+  z-index: 800;
+  background: #18130d;
+  border: 1px solid color-mix(in srgb, var(--metal) 38%, transparent);
+  border-radius: 14px;
+  padding: 6px;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--metal-hi) 22%, transparent),
+    0 10px 32px rgba(0,0,0,0.65);
+  font-size: var(--text-caption);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.demo-panel-head {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: var(--metal-hi);
+  user-select: none;
+}
+.demo-panel-head .ico { width: 12px; height: 12px; }
+.demo-panel.collapsed .demo-panel-body { display: none; }
+.demo-panel-body {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 6px 8px 8px;
+  min-width: 200px;
+}
+.demo-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--text-etch-soft);
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-weight: 500;
+}
+.demo-row label { cursor: pointer; }
+.demo-toggle {
+  position: relative;
+  width: 32px; height: 18px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.10);
+  border: 1px solid color-mix(in srgb, var(--metal) 22%, transparent);
+  cursor: pointer; flex-shrink: 0;
+  transition: background 180ms;
+}
+.demo-toggle::before {
+  content: ""; position: absolute;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  top: 1px; left: 1px;
+  background: var(--metal-hi);
+  transition: left 180ms var(--ease-out);
+}
+.demo-toggle[aria-pressed="true"] { background: color-mix(in srgb, var(--active-strong) 50%, transparent); }
+.demo-toggle[aria-pressed="true"]::before { left: 16px; }
+.demo-view-row { display: flex; gap: 4px; padding-top: 4px; }
+.demo-view-btn {
+  flex: 1;
+  appearance: none; border: 0;
+  padding: 5px 8px; border-radius: 8px;
+  background: rgba(255,255,255,0.05);
+  color: var(--text-etch-soft);
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: capitalize;
+  cursor: pointer; font-family: inherit;
+  transition: background 180ms, color 180ms;
+}
+.demo-view-btn[aria-pressed="true"] {
+  background: var(--active-soft);
+  color: var(--metal-hi);
+}
+</style>
+</head>
+<body>
+
+<!-- ──────────────────────────────────────────────────────────────────
+     SVG defs — wax-seal masks + a placeholder defs node for the
+     per-pane liquid-glass filters that JS will inject at runtime.
+     ────────────────────────────────────────────────────────────── -->
+<svg style="position:absolute; width:0; height:0;" aria-hidden="true"
+     color-interpolation-filters="sRGB">
+  <defs id="lg-defs"><!-- JS-injected per-pane <filter> nodes land here --></defs>
+  <defs>
+    <!-- (2) Wax-seal blobs — hand-drawn cubic-bezier paths, irregular
+         on purpose. Each blob has its own asymmetric edge bias so
+         no two seals press the same. Drips on different sides. -->
+    <symbol id="wax-blob" viewBox="0 0 44 44">
+      <path d="M22 2.5
+               C 28.5 2.2  34.5 4.4  37.8 9.2
+               C 41.1 14.0  41.8 19.6  40.5 24.8
+               C 39.2 30.0  36.0 34.6  31.6 37.4
+               C 27.2 40.2  21.6 41.0  16.4 39.8
+               C 11.2 38.6  6.4 35.6  3.8 31.0
+               C 1.2 26.4  0.8 20.6  2.6 15.4
+               C 4.4 10.2  8.4 5.8   13.6 3.6
+               C 16.4 2.4  19.0 2.6  22 2.5 Z
+               M 38.0 26.5
+               C 39.2 28.4  39.8 30.6  39.0 32.0
+               C 38.2 33.0  37.0 31.8  36.4 30.0
+               C 36.0 28.8  37.0 27.0  38.0 26.5 Z"/>
+    </symbol>
+
+    <!-- secondary blob — bigger drip on the LEFT side -->
+    <symbol id="wax-blob-2" viewBox="0 0 44 44">
+      <path d="M22.5 3
+               C 29.0 2.8  35.5 5.6  38.2 11.0
+               C 41.0 16.4  40.6 22.6  38.0 27.4
+               C 35.4 32.2  31.0 36.4  25.6 38.0
+               C 20.2 39.6  14.0 38.6  9.4 35.2
+               C 4.8 31.8  1.8 26.0  2.0 20.4
+               C 2.2 14.8  5.6 9.4   10.6 6.2
+               C 14.0 4.0  18.4 3.2  22.5 3 Z
+               M 3.6 22.0
+               C 1.8 24.6  0.6 28.0  2.4 31.0
+               C 4.0 33.6  6.6 32.0  6.2 28.4
+               C 6.0 25.4  4.6 22.8  3.6 22.0 Z"/>
+    </symbol>
+
+    <!-- Feedback glyphs — used in the thumbs-up/down trainer for
+         specialist sentiment. Solid fills, currentColor for theming. -->
+    <symbol id="ico-thumbs-up" viewBox="0 0 24 24">
+      <path d="M7 11v10H4a1 1 0 0 1-1-1V12a1 1 0 0 1 1-1h3zm2 0l4-7c.6-1 1.5-1.4 2.5-1 1 .4 1.5 1.4 1.3 2.4L16 9h4.5c1.4 0 2.5 1.3 2.2 2.7l-1.5 7c-.2 1.1-1.2 1.8-2.3 1.8H9V11z"
+            fill="currentColor"/>
+    </symbol>
+    <symbol id="ico-thumbs-down" viewBox="0 0 24 24">
+      <path d="M17 13V3h3a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-3zm-2 0l-4 7c-.6 1-1.5 1.4-2.5 1-1-.4-1.5-1.4-1.3-2.4L8 15H3.5C2.1 15 1 13.7 1.3 12.3l1.5-7C3 4.2 4 3.5 5.1 3.5H15v9.5z"
+            fill="currentColor"/>
+    </symbol>
+
+    <!-- Wax fill: a radial gradient with a bright hot center where the
+         stamp impact would be, falling to a deep crimson at the rim. -->
+    <radialGradient id="wax-fill" cx="36%" cy="30%" r="80%">
+      <stop offset="0%"   stop-color="#e36060"/>
+      <stop offset="30%"  stop-color="#b22a2a"/>
+      <stop offset="65%"  stop-color="#7a1414"/>
+      <stop offset="100%" stop-color="#330505"/>
+    </radialGradient>
+
+    <!-- Real emboss filter: lift the surface with specular highlights
+         from upper-left + a dark inner shadow from the lower-right.
+         Replaces the previous simplistic specular-only version; this
+         one reads as wax, not as a shaded disc. -->
+    <filter id="wax-emboss" x="-10%" y="-10%" width="120%" height="120%">
+      <!-- 1. Inner shadow (lower-right) -->
+      <feGaussianBlur in="SourceAlpha" stdDeviation="1.1" result="aBlur"/>
+      <feOffset in="aBlur" dx="1.2" dy="1.6" result="aOff"/>
+      <feComposite in="aOff" in2="SourceAlpha" operator="arithmetic"
+                   k2="-1" k3="1" result="innerShadow"/>
+      <feFlood flood-color="#1a0303" flood-opacity="0.75" result="shadowColor"/>
+      <feComposite in="shadowColor" in2="innerShadow" operator="in" result="innerShadowColored"/>
+      <!-- 2. Specular highlight (upper-left) -->
+      <feSpecularLighting in="aBlur" surfaceScale="2.4" specularConstant="0.85"
+                          specularExponent="22" lighting-color="#ffdada" result="spec">
+        <feDistantLight azimuth="135" elevation="56"/>
+      </feSpecularLighting>
+      <feComposite in="spec" in2="SourceAlpha" operator="in" result="specMasked"/>
+      <!-- 3. Stack: source + specular highlight + inner shadow -->
+      <feMerge>
+        <feMergeNode in="SourceGraphic"/>
+        <feMergeNode in="specMasked"/>
+        <feMergeNode in="innerShadowColored"/>
+      </feMerge>
+    </filter>
+  </defs>
+</svg>
+
+<!-- Reusable inline templates for wax seals on cards (not in the rail) -->
+<template id="tpl-mini-seal">
+  <svg viewBox="0 0 44 44" class="wax">
+    <use href="#wax-blob" fill="url(#wax-fill)" filter="url(#wax-emboss)"/>
+  </svg>
+</template>
+
+
+<div class="shell">
+
+  <!-- ── topbar ─────────────────────────────────────────────────── -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <!-- Wordmark — geometric caps with a single ~23° diagonal cut,
+           inspired by Flump Studio's NASA Artemis treatment. Each
+           letter shares the same slash; reads as one carved object. -->
+      <a class="brand" href="#" aria-label="Hearth — home">
+        <svg class="brand-mark" viewBox="0 0 200 40" aria-hidden="true">
+          <defs>
+            <linearGradient id="brand-grad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stop-color="var(--metal-hi)"/>
+              <stop offset="55%"  stop-color="var(--metal)"/>
+              <stop offset="100%" stop-color="var(--metal-mid)"/>
+            </linearGradient>
+            <mask id="brand-cut">
+              <rect width="200" height="40" fill="white"/>
+              <line x1="-10" y1="44" x2="210" y2="-8"
+                    stroke="black" stroke-width="3.5"/>
+            </mask>
+          </defs>
+          <g mask="url(#brand-cut)">
+            <text x="0" y="32"
+                  font-family="'Bahnschrift', 'DIN Alternate', 'Eurostile', system-ui, sans-serif"
+                  font-weight="700"
+                  font-size="32"
+                  letter-spacing="5"
+                  fill="url(#brand-grad)">HEARTH</text>
+          </g>
+        </svg>
+      </a>
+      <button class="btn-icon" id="btn-roadmap" title="Roadmap" aria-label="Roadmap">
+        <svg viewBox="0 0 24 24" class="ico">
+          <path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/>
+          <line x1="9" y1="4" x2="9" y2="18"/>
+          <line x1="15" y1="6" x2="15" y2="20"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="topbar-center"><!-- intentionally empty; conversation persona lives in main-head --></div>
+
+    <div class="topbar-actions">
+      <!-- theme toggle (POC-only) -->
+      <div class="theme-toggle" role="group" aria-label="theme">
+        <button id="theme-gilded" aria-pressed="true">Gilded</button>
+        <button id="theme-frosted" aria-pressed="false">Frosted</button>
+      </div>
+      <!-- ("+ New" lives in the left rail header now — conversations
+           start in the rail, not in global app chrome.) -->
+
+      <!-- icon buttons — line-art SVG instead of emoji, so the
+           visual language is one (warm gold linework), and each
+           glyph reads at a glance.
+           search   = magnifier with brass rim
+           queue    = wax-sealed envelope (awaiting your nod)
+           library  = open book
+           map      = folded map with creases -->
+      <button class="btn-icon" id="btn-search" title="Search (⌘K)" aria-label="Search">
+        <svg viewBox="0 0 24 24" class="ico">
+          <circle cx="11" cy="11" r="6"/>
+          <line x1="20" y1="20" x2="15.5" y2="15.5"/>
+        </svg>
+      </button>
+      <button class="btn-icon" id="btn-queue" title="Awaiting your nod" aria-label="Queue">
+        <svg viewBox="0 0 24 24" class="ico">
+          <rect x="3" y="6" width="18" height="13" rx="2"/>
+          <path d="M3 8l9 6 9-6"/>
+          <circle cx="17.5" cy="16.5" r="1.6" fill="currentColor" stroke="none"/>
+        </svg>
+        <span class="badge">3</span>
+      </button>
+      <button class="btn-icon" id="btn-files" title="Library" aria-label="Library">
+        <svg viewBox="0 0 24 24" class="ico">
+          <path d="M12 5v15"/>
+          <path d="M12 5C10 4 6 4 3.5 5v14C6 18 10 18 12 19"/>
+          <path d="M12 5C14 4 18 4 20.5 5v14C18 18 14 18 12 19"/>
+        </svg>
+      </button>
+
+      <!-- divider before account -->
+      <span class="topbar-divider" aria-hidden="true"></span>
+
+      <!-- user bubble — avatar + name + chevron; clicks open the menu -->
+      <button class="user-bubble" id="user-bubble" type="button"
+              data-conn-state="connected"
+              aria-haspopup="menu" aria-expanded="false" title="Account">
+        <span class="user-bubble-avatar" id="user-bubble-avatar">J</span>
+        <span class="user-bubble-name">Jasper</span>
+        <svg viewBox="0 0 24 24" class="ico user-bubble-chev" aria-hidden="true">
+          <path d="M6 9l6 6 6-6"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- User menu lifted OUT of the topbar so no parent's
+       backdrop-filter / stacking context can wash it out. -->
+  <div class="user-menu" id="user-menu" role="menu" hidden>
+    <div class="user-menu-header">
+      <span class="user-menu-avatar">J</span>
+      <div>
+        <div class="user-menu-name">Jasper</div>
+        <div class="user-menu-email muted">you@example.com</div>
+      </div>
+    </div>
+    <div class="user-menu-row">
+      <span class="user-menu-dot" data-state="connected"></span>
+      <span>Connected · the always-on host (kiosk)</span>
+    </div>
+    <div class="user-menu-sep"></div>
+    <button class="user-menu-item" role="menuitem">
+      <svg viewBox="0 0 24 24" class="ico"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg>
+      Settings
+    </button>
+    <button class="user-menu-item" role="menuitem">
+      <svg viewBox="0 0 24 24" class="ico"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      Lock screen
+    </button>
+    <button class="user-menu-item" role="menuitem">
+      <svg viewBox="0 0 24 24" class="ico"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l-5-5 5-5"/><path d="M15 12H5"/></svg>
+      Switch user
+    </button>
+  </div>
+
+  <!-- ── Discord-style profile modal (ported from prod, Cozy 2.0). ──
+       Opened by clicking any specialist's wax seal. Closes via the
+       ✕ button, Escape, or click on the backdrop. -->
+  <div class="modal-backdrop" id="profile-modal" hidden role="dialog"
+       aria-modal="true" aria-labelledby="profile-name">
+    <div class="profile-card" id="profile-card">
+      <button class="profile-close" id="profile-close" aria-label="Close">✕</button>
+      <button class="profile-admin" id="profile-admin"
+              aria-label="More options" title="More options (admin)">
+        <svg viewBox="0 0 24 24" class="ico"><circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <div class="profile-banner" id="profile-banner"></div>
+      <div class="profile-header">
+        <div class="profile-avatar-frame">
+          <img class="profile-avatar-img" id="profile-avatar" alt="" />
+        </div>
+        <div class="profile-identity">
+          <h2 class="profile-name" id="profile-name">Kate</h2>
+          <div class="profile-role" id="profile-role">Chief of Staff</div>
+          <div class="profile-meta-line" id="profile-meta-line"></div>
+        </div>
+      </div>
+      <div class="profile-body" id="profile-body">
+        <!-- sections rendered by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ── left rail ──────────────────────────────────────────────── -->
+  <aside class="left pane">
+    <div class="rail-header">
+      <div class="rail-title etched">Staff</div>
+      <button class="rail-new" id="btn-new-conv" type="button"
+              title="New conversation" aria-label="New conversation">
+        <svg viewBox="0 0 24 24" class="ico"><path d="M12 5v14M5 12h14"/></svg>
+        <span class="rail-new-label">New</span>
+      </button>
+    </div>
+
+    <!-- (9) consult thread — particle stream layered behind the rail.
+         The path is invisible; motes (.thread-mote) are positioned
+         along it each frame by JS. -->
+    <svg class="consult-thread" id="consult-thread" preserveAspectRatio="none">
+      <path   id="thread-path"  class="thread-line" d="" />
+      <g      id="thread-motes"></g>
+      <circle id="thread-recv"  class="thread-recv"  cx="0" cy="0" />
+    </svg>
+
+    <!-- Fixed prod-aligned roster: 12 specialists in importance order.
+         Hierarchy: chief, then strategic counsel, then high-stakes
+         daily, then operational/leverage, then seasonal, then leisure.
+         Same-letter seals (M for Mariah + Marguerite; B for Beatrice +
+         Brigid; C for Cassandra + Cordelia) are distinguished by which
+         wax-blob variant they use. -->
+    <ul class="staff-list" id="staff-list">
+      <li class="staff active" data-id="kate">
+        <div class="seal" data-tone="fresh">
+          <svg viewBox="0 0 44 44" class="wax"><use href="#wax-blob" fill="url(#wax-fill)" filter="url(#wax-emboss)"/></svg>
+          <span class="letter">K</span>
+        </div>
+        <div class="staff-meta">
+          <div class="staff-name etched">Kate</div>
+          <div class="staff-role">Chief of Staff</div>
+        </div>
+      </li>
+      <li class="staff" data-id="cassandra">
+        <div class="seal" data-tone="lapsed">
+          <svg viewBox="0 0 44 44" class="wax"><use href="#wax-blob" fill="url(#wax-fill)" filter="url(#wax-emboss)"/></svg>
+          <span class="letter">C</span>
+        </div>
+        <div class="staff-meta">
+          <div class="staff-name etched">Cassandra</div>
+          <div class="staff-role muted">Security Officer · 19 days quiet</div>
+        </div>
+      </li>
+      <li class="staff" data-id="mariah">
+        <div class="seal" data-tone="fresh">
+          <svg viewBox="0 0 44 44" class="wax"><use href="#wax-blob-2" fill="url(#wax-fill)" filter="url(#wax-emboss)"/></svg>
+          <span class="letter">M</span>
+        </div>
+        <div class="staff-meta">
+          <div class="staff-name etched">Mariah</div>
+          <div class="staff-role">Program Manager</div>
+        </div>
+      </li>
+      <li class="staff" data-id="anya">
+        <div class="seal" data-tone="aged">
+          <svg viewBox="0 0 44 44" class="wax"><use href="#wax-blob" fill="url(#wax-fill)" filter="url(#wax-emboss)"/></svg>
+          <span class="letter">A</span>
+        </div>
+        <div class="staff-meta">
+          <div class="staff-name etched">Dr. Anya</div>
+          <div class="staff-role">Veterinarian</div>
+        </div>
+      </li>
+      <li class="staff" data-id="vivian">
+        <div class="seal" data-tone="fresh">
+          <svg viewBox="0 0 44 44" class="wax"><use href="#wax-blob-2" fill="url(#wax-fill)" filter="url(#wax-emboss)"/></svg>
+          <span class="letter">V</span>
+        </div>
+        <div class="staff-meta">
+          <div class="staff-name etched">Vivian</div>
+          <div class="staff-role">Finance Officer</div>
+        </div>
+      </li>
+      <li class="staff" data-id="trainer">
+        <div class="seal" data-tone="aged">
+          <svg viewBox="0 0 44 44" class="wax"><use href="#wax-blob-2" fill="url(#wax-fill)" filter="url(#wax-emboss)"/></svg>
+          <span class="letter">B</span>
+        </div>
+        <div class="staff-meta">
+          <div class="staff-name etched">Beatrice</div>
+          <div class="staff-role">Enterprise Trainer</div>
+        </div>
+      </li>
+      <li class="staff" data-id="iris">
+        <div class="seal" data-tone="aged">
+          <svg viewBox="0 0 44 44" class="wax"><use href="#wax-blob-2" fill="url(#wax-fill)" filter="url(#wax-emboss)"/></svg>
+          <span class="letter">I</span>
+        </div>
+        <div class="staff-meta">
+          <div class="staff-name etched">Iris</div>
+          <div class="staff-role">EV &amp; Home Automation</div>
+        </div>
+      </li>
+      <li class="staff" data-id="cordelia">
+        <div class="seal" data-tone="fresh">
+          <svg viewBox="0 0 44 44" class="wax"><use href="#wax-blob-2" fill="url(#wax-fill)" filter="url(#wax-emboss)"/></svg>
+          <span class="letter">C</span>
+        </div>
+        <div class="staff-meta">
+          <div class="staff-name etched">Cordelia</div>
+          <div class="staff-role">Master Librarian</div>
+        </div>
+      </li>
+      <li class="staff" data-id="brigid">
+        <div class="seal" data-tone="fresh">
+          <svg viewBox="0 0 44 44" class="wax"><use href="#wax-blob" fill="url(#wax-fill)" filter="url(#wax-emboss)"/></svg>
+          <span class="letter">B</span>
+        </div>
+        <div class="staff-meta">
+          <div class="staff-name etched">Brigid</div>
+          <div class="staff-role">Cook</div>
+        </div>
+      </li>
+      <li class="staff" data-id="eleanor">
+        <div class="seal" data-tone="aged">
+          <svg viewBox="0 0 44 44" class="wax"><use href="#wax-blob-2" fill="url(#wax-fill)" filter="url(#wax-emboss)"/></svg>
+          <span class="letter">E</span>
+        </div>
+        <div class="staff-meta">
+          <div class="staff-name etched">Eleanor</div>
+          <div class="staff-role">Master Gardener</div>
+        </div>
+      </li>
+      <li class="staff" data-id="marguerite">
+        <div class="seal" data-tone="aged">
+          <svg viewBox="0 0 44 44" class="wax"><use href="#wax-blob" fill="url(#wax-fill)" filter="url(#wax-emboss)"/></svg>
+          <span class="letter">M</span>
+        </div>
+        <div class="staff-meta">
+          <div class="staff-name etched">Marguerite</div>
+          <div class="staff-role">Family Historian</div>
+        </div>
+      </li>
+      <li class="staff" data-id="maggie">
+        <div class="seal" data-tone="lapsed">
+          <svg viewBox="0 0 44 44" class="wax"><use href="#wax-blob-2" fill="url(#wax-fill)" filter="url(#wax-emboss)"/></svg>
+          <span class="letter">G</span>
+        </div>
+        <div class="staff-meta">
+          <div class="staff-name etched">Maggie</div>
+          <div class="staff-role muted">Media &amp; Collections · 31 days quiet</div>
+        </div>
+      </li>
+    </ul>
+  </aside>
+
+  <!-- ── center: conversation ──────────────────────────────────── -->
+  <section class="main pane">
+    <div class="main-head">
+      <!-- The whole seal+name+role is one clickable region that
+           opens the profile. Hover shows the affordance; the seal
+           and name highlight together so you read them as one
+           thing. The status row stays inside the trigger as well —
+           she's a single persona, not three controls. -->
+      <button class="head-trigger" id="head-trigger" type="button"
+              title="Open profile" aria-label="Open profile">
+        <img class="head-avatar" id="active-avatar" alt="" />
+        <div class="grow head-identity" id="active-identity">
+          <div class="head-name-row">
+            <div class="etched-deep" style="font-size:18px;font-weight:600;" id="active-name">Kate</div>
+            <div class="muted" style="font-size:12px;" id="active-role">Chief of Staff</div>
+            <svg class="head-chev ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+          </div>
+          <div class="status-row" id="active-status-row">
+            <span class="status-dot" id="active-status-dot" data-state="ready"></span>
+            <span class="status-text" id="active-status-text">ready</span>
+            <span class="status-sep">·</span>
+            <span class="status-meta" id="active-meta">brief at 07:00 · next 12:30 <span id="active-countdown" class="countdown"></span></span>
+          </div>
+        </div>
+      </button>
+      <div class="trust-meter" id="trust-meter" data-trust="high"
+           title="How confident she is in her current take — sources, freshness, certainty.">
+        <span class="trust-bars" aria-hidden="true"><span></span><span></span><span></span></span>
+        <span class="trust-text" id="trust-text">trust · high</span>
+      </div>
+      <div class="head-status" id="active-flags">
+        <span class="pill flag-pill" id="flag-pill">no flags</span>
+      </div>
+    </div>
+
+    <div class="convo" id="convo">
+      <!-- Empty state — shown when there are no bubbles. Updated by JS
+           when the active specialist changes. -->
+      <div class="empty-convo" id="empty-convo" hidden>
+        <img class="empty-convo-portrait" id="empty-portrait" alt=""/>
+        <div>
+          <div class="empty-convo-greeting" id="empty-greeting">Good morning, Captain. What's on your mind?</div>
+          <div class="empty-convo-sub" id="empty-sub">— Kate</div>
+        </div>
+      </div>
+
+      <div class="bubble assistant" data-prov="vault">
+        <div class="who">Kate</div>
+        <p>Good morning, Captain. Vivian flagged two recurring charges that have crept up against last quarter. Bailey's transfusion window opens Thursday — supply runway 11 days.</p>
+      </div>
+
+      <div class="bubble user">
+        <div class="who">Jasper</div>
+        <p>Tell me more about the recurring charges.</p>
+      </div>
+
+      <div class="bubble assistant" data-prov="inbox">
+        <div class="who">Vivian</div>
+        <p>Adobe CC stepped to <b>$55.99/mo</b> last cycle (was $52.99). Last app launch was 2026-02-22 — seven months ago. I've queued a Tier 2b proposal in the right rail.</p>
+      </div>
+
+      <div class="bubble assistant" data-prov="vault" id="last-bubble">
+        <div class="who">Kate</div>
+        <p id="stream-target" class="stream"></p>
+        <div style="margin-top:8px;">
+          <button class="btn btn-glass" id="replay-stream" style="font-size:12px;padding:5px 10px;">↻ replay streaming</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stub views — sibling of .convo. Toggled by demo panel; the
+         View Transitions API morphs the .main pane between them. -->
+    <div class="stub-view" id="view-library" hidden>
+      <h2>Library</h2>
+      <div class="stub-view-card">
+        <b>Recent</b><br/>
+        <div class="muted" style="margin-top:6px;">
+          2026-05-22 · Adobe receipt forwarded by Vivian<br/>
+          2026-05-20 · Vet records — Bailey<br/>
+          2026-05-18 · Trip plan — the workstation
+        </div>
+      </div>
+      <div class="stub-view-card">
+        <b>Folders</b><br/>
+        <div class="muted" style="margin-top:6px;">finance · pets · travel · clippings</div>
+      </div>
+    </div>
+
+    <div class="stub-view" id="view-settings" hidden>
+      <h2>Settings</h2>
+      <div class="stub-view-card">
+        <b>Appearance</b><br/>
+        <div class="muted" style="margin-top:6px;">Theme · density · accent</div>
+      </div>
+      <div class="stub-view-card">
+        <b>Notifications</b><br/>
+        <div class="muted" style="margin-top:6px;">Quiet hours · push channels · per-specialist mute</div>
+      </div>
+      <div class="stub-view-card">
+        <b>Account</b><br/>
+        <div class="muted" style="margin-top:6px;">Jasper · you@example.com</div>
+      </div>
+    </div>
+
+    <div class="composer">
+      <!-- Context-window donut lives here, not in the topbar — it's
+           about the conversation you're feeding, not global chrome.
+           Same #id so the demo ticker keeps animating it. -->
+      <button class="context-donut composer-donut" id="context-donut" type="button"
+              aria-label="Context window usage" title="Context window usage">
+        <svg class="donut-svg" viewBox="0 0 36 36" aria-hidden="true">
+          <circle class="donut-track" cx="18" cy="18" r="15" />
+          <circle class="donut-bar"   cx="18" cy="18" r="15"
+                  pathLength="100" stroke-dasharray="42 100" />
+        </svg>
+        <span class="donut-label">42%</span>
+      </button>
+      <textarea class="input" rows="1" placeholder="Speak with the active specialist…"></textarea>
+      <button class="btn btn-glass">Attach</button>
+      <button class="btn btn-matte" id="send-btn">Send</button>
+    </div>
+  </section>
+
+  <!-- ── right rail ────────────────────────────────────────────── -->
+  <aside class="right pane">
+    <div class="card">
+      <h3>Morning brief · 07:00</h3>
+      <div class="brief-line"><b class="etched">Calendar.</b> 09:30 Sandbar standup · 14:00 vet call (Bailey).</div>
+      <div class="brief-line"><b class="etched">Weather.</b> 38° → 64°. Wind from the NW.</div>
+      <div class="brief-line"><b class="etched">Pets.</b> Bailey's transfusion window opens Thursday. Supply runway: 11 days.</div>
+      <div class="brief-line"><b class="etched">Finance.</b> Two anomalies queued.</div>
+    </div>
+
+    <!-- (10 + 3) expanding proposal card with seal-press on approve -->
+    <div class="card proposal" id="proposal">
+      <h3>Pending proposal · Vivian</h3>
+
+      <div class="seal seal-press" aria-hidden="true">
+        <svg viewBox="0 0 44 44" class="wax"><use href="#wax-blob" fill="url(#wax-fill)" filter="url(#wax-emboss)"/></svg>
+        <span class="letter">V</span>
+      </div>
+
+      <p class="etched" style="margin:0 0 10px;">
+        Cancel Adobe CC ($55.99/mo) — unused in 91 days. Net <b>$671/yr</b>.
+      </p>
+
+      <div class="proposal-detail">
+        <div class="proposal-detail-inner">
+          <p style="margin:0 0 8px;"><b class="etched">Evidence.</b> Last app launch was 2026-02-22 (Lightroom for one export). Subscription has billed 7×$55.99 since.</p>
+          <p style="margin:0 0 8px;"><b class="etched">Risk if cancelled.</b> 14-day reactivation window. No active synced cloud assets.</p>
+          <p style="margin:0;"><b class="etched">Recommendation.</b> Approve. If you reactivate within 90 days, Vivian will flag the resumption.</p>
+        </div>
+      </div>
+
+      <div class="row gap-sm" style="margin-top:10px;">
+        <button class="btn btn-glass" id="expand-proposal">Details ▾</button>
+        <button class="btn btn-matte" id="approve-proposal">Approve</button>
+        <button class="btn btn-glass" id="defer-proposal">Defer</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Tonight</h3>
+      <div class="brief-line">Maggie found a Lord Huron show at Riverbend, Jun 12.</div>
+    </div>
+  </aside>
+
+</div>
+
+<!-- ── Demo control panel (POC-only). Toggle quiet hours, sound,
+     and switch between Conversation / Library / Settings stub views
+     so the View Transitions API can morph between them. -->
+<div class="demo-panel collapsed" id="demo-panel" aria-label="POC demo controls">
+  <div class="demo-panel-head" id="demo-panel-head">
+    <svg viewBox="0 0 24 24" class="ico"><circle cx="12" cy="12" r="3"/><circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none"/></svg>
+    Demo
+  </div>
+  <div class="demo-panel-body">
+    <div class="demo-row">
+      <label for="toggle-quiet">Quiet hours</label>
+      <button class="demo-toggle" id="toggle-quiet" aria-pressed="false" aria-label="Toggle quiet hours"></button>
+    </div>
+    <div class="demo-row">
+      <label for="toggle-sound">Sound</label>
+      <button class="demo-toggle" id="toggle-sound" aria-pressed="false" aria-label="Toggle sound"></button>
+    </div>
+    <div class="demo-row">
+      <label>Empty state</label>
+      <button class="demo-toggle" id="toggle-empty" aria-pressed="false" aria-label="Show empty conversation state"></button>
+    </div>
+    <div class="demo-view-row">
+      <button class="demo-view-btn" data-view="convo"    aria-pressed="true">Convo</button>
+      <button class="demo-view-btn" data-view="library"  aria-pressed="false">Library</button>
+      <button class="demo-view-btn" data-view="settings" aria-pressed="false">Settings</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ──────────────────────────────────────────────────────────────────
+     SCRIPTS — keep this short; each block maps to one mechanic above
+     ────────────────────────────────────────────────────────────── -->
+<script>
+'use strict';
+
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+/* ── topbar interactions: user menu + donut demo ──────────────── */
+const userBubble = $('#user-bubble');
+const userMenu   = $('#user-menu');
+const closeMenu  = () => {
+  userMenu.hidden = true;
+  userBubble.setAttribute('aria-expanded', 'false');
+};
+const openMenu = () => {
+  userMenu.hidden = false;
+  userBubble.setAttribute('aria-expanded', 'true');
+};
+userBubble.addEventListener('click', (e) => {
+  e.stopPropagation();
+  userMenu.hidden ? openMenu() : closeMenu();
+});
+document.addEventListener('click', (e) => {
+  if (!userMenu.hidden && !userMenu.contains(e.target)) closeMenu();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !userMenu.hidden) closeMenu();
+});
+
+// Donut demo — slowly fills + crosses calm → amber → urgent thresholds
+// so the user can see the themed state changes without contriving a
+// long conversation. Click to reset to 42%.
+const donut    = $('#context-donut');
+const donutBar = donut.querySelector('.donut-bar');
+const donutLbl = donut.querySelector('.donut-label');
+const setDonut = (pct) => {
+  donutBar.setAttribute('stroke-dasharray', `${pct} 100`);
+  donutLbl.textContent = `${pct}%`;
+  donut.dataset.state = pct >= 85 ? 'urgent' : pct >= 60 ? 'amber' : 'calm';
+};
+setDonut(42);
+let donutT = 42, donutDir = +2;
+setInterval(() => {
+  donutT += donutDir;
+  if (donutT >= 96 || donutT <= 18) donutDir = -donutDir;
+  setDonut(donutT);
+}, 1100);
+donut.addEventListener('click', () => { donutT = 42; setDonut(42); });
+
+/* ── theme toggle ─────────────────────────────────────────────── */
+const setTheme = (name) => {
+  document.documentElement.dataset.theme = name;
+  $('#theme-gilded').setAttribute('aria-pressed',  name === 'gilded');
+  $('#theme-frosted').setAttribute('aria-pressed', name === 'frosted');
+};
+$('#theme-gilded').addEventListener('click',  () => setTheme('gilded'));
+$('#theme-frosted').addEventListener('click', () => setTheme('frosted'));
+
+/* ── (1) LIQUID GLASS — bezel-displacement refraction ─────────────
+   Port of the core technique from github.com/archisvaze/liquid-glass.
+   Per pane we draw two canvases:
+     - dispMap: interior = neutral gray (128, 128, 0) = no displacement;
+       a ring of `bezelWidth` at every edge encodes a cosine-shaped
+       displacement vector that points INWARD. R = x-displace,
+       G = y-displace. feDisplacementMap reads these channels and bends
+       backdrop pixels accordingly.
+     - specMap: thin alpha highlight along the bezel, raked at a fixed
+       angle, simulating a sheen along the curved edge of the glass.
+   Both are converted to data URLs and injected into a per-pane SVG
+   <filter>, which is applied to the element via backdrop-filter. */
+
+function generateDisplacementMap(w, h, radius, bezelWidth, profile, maxDisp) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(w, h);
+  const d = img.data;
+  // Fill with the "no displacement" neutral gray (R=128, G=128, B=0, A=255).
+  for (let i = 0; i < d.length; i += 4) {
+    d[i] = 128; d[i + 1] = 128; d[i + 2] = 0; d[i + 3] = 255;
+  }
+  const r = radius;
+  const rSq = r * r, r1Sq = (r + 1) ** 2;
+  const rBSq = Math.max(r - bezelWidth, 0) ** 2;
+  const wB = w - r * 2, hB = h - r * 2, S = profile.length;
+  for (let y1 = 0; y1 < h; y1++) {
+    for (let x1 = 0; x1 < w; x1++) {
+      // For each pixel, x/y is the offset from the nearest corner/edge
+      // (0 if we're in the straight section of an edge).
+      const x = x1 < r ? x1 - r : x1 >= w - r ? x1 - r - wB : 0;
+      const y = y1 < r ? y1 - r : y1 >= h - r ? y1 - r - hB : 0;
+      const dSq = x * x + y * y;
+      if (dSq > r1Sq || dSq < rBSq) continue;
+      const dist = Math.sqrt(dSq);
+      const fromSide = r - dist;
+      const op = dSq < rSq
+        ? 1
+        : 1 - (dist - Math.sqrt(rSq)) / (Math.sqrt(r1Sq) - Math.sqrt(rSq));
+      if (op <= 0 || dist === 0) continue;
+      const cos = x / dist, sin = y / dist;
+      const bi = Math.min(((fromSide / bezelWidth) * S) | 0, S - 1);
+      const disp = profile[bi] || 0;
+      const dX = (-cos * disp) / maxDisp;
+      const dY = (-sin * disp) / maxDisp;
+      const idx = (y1 * w + x1) * 4;
+      d[idx]     = (128 + dX * 127 * op + 0.5) | 0;
+      d[idx + 1] = (128 + dY * 127 * op + 0.5) | 0;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return c.toDataURL();
+}
+
+function generateSpecularMap(w, h, radius, bezelWidth, angle = Math.PI / 3) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(w, h);
+  const d = img.data; d.fill(0);
+  const r = radius;
+  const rSq = r * r, r1Sq = (r + 1) ** 2;
+  const rBSq = Math.max(r - bezelWidth, 0) ** 2;
+  const wB = w - r * 2, hB = h - r * 2;
+  const sv = [Math.cos(angle), Math.sin(angle)];
+  for (let y1 = 0; y1 < h; y1++) {
+    for (let x1 = 0; x1 < w; x1++) {
+      const x = x1 < r ? x1 - r : x1 >= w - r ? x1 - r - wB : 0;
+      const y = y1 < r ? y1 - r : y1 >= h - r ? y1 - r - hB : 0;
+      const dSq = x * x + y * y;
+      if (dSq > r1Sq || dSq < rBSq) continue;
+      const dist = Math.sqrt(dSq);
+      const fromSide = r - dist;
+      const op = dSq < rSq
+        ? 1
+        : 1 - (dist - Math.sqrt(rSq)) / (Math.sqrt(r1Sq) - Math.sqrt(rSq));
+      if (op <= 0 || dist === 0) continue;
+      const cos = x / dist, sin = -y / dist;
+      const dot = Math.abs(cos * sv[0] + sin * sv[1]);
+      const edge = Math.sqrt(Math.max(0, 1 - (1 - fromSide) ** 2));
+      const coeff = dot * edge;
+      const col = (255 * coeff) | 0;
+      const alpha = (col * coeff * op) | 0;
+      const idx = (y1 * w + x1) * 4;
+      d[idx] = col; d[idx + 1] = col; d[idx + 2] = col; d[idx + 3] = alpha;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return c.toDataURL();
+}
+
+// Refraction profile across the bezel. Index 0 = outermost edge, S-1
+// = innermost. Bell-shape concentrated near the outer edge gives a
+// classic "convex glass tile" look. Tweak `power` toward 0.8 for a
+// puffier lens or 2.0 for a sharp edge-only refraction.
+function makeProfile(thickness, samples = 128, power = 1.3) {
+  const out = new Float32Array(samples);
+  for (let i = 0; i < samples; i++) {
+    const t = i / (samples - 1);              // 0..1 outer→inner
+    out[i] = Math.pow(1 - t, power) * thickness;
+  }
+  return out;
+}
+
+const lgDefs = document.getElementById('lg-defs');
+let lgSeq = 0;
+
+function installLiquidGlass(el, opts = {}) {
+  const w = el.offsetWidth, h = el.offsetHeight;
+  if (w < 4 || h < 4) return;
+  // Tunables — sensible defaults; bezel scales with pane size so small
+  // cards still show edge refraction.
+  const radius     = opts.radius     ?? 14;
+  const bezel      = opts.bezel      ?? Math.min(36, Math.min(w, h) * 0.10);
+  const thickness  = opts.thickness  ?? 22;
+  const blurAmt    = opts.blurAmt    ?? 6;
+  const saturation = opts.saturation ?? 1.6;
+  const specOp     = opts.specOp     ?? 0.55;
+  const scaleRatio = opts.scaleRatio ?? 1.0;
+
+  const profile = makeProfile(thickness);
+  const maxDisp = Math.max(...Array.from(profile).map(Math.abs)) || 1;
+  const dispUrl = generateDisplacementMap(w, h, radius, bezel, profile, maxDisp);
+  const specUrl = generateSpecularMap(w, h, radius, bezel * 2.5);
+  const scale   = maxDisp * scaleRatio;
+
+  let fid = el.dataset.lgId;
+  if (!fid) {
+    fid = 'lg-' + (++lgSeq);
+    el.dataset.lgId = fid;
+    lgDefs.insertAdjacentHTML('beforeend',
+      `<filter id="${fid}" x="0%" y="0%" width="100%" height="100%"
+               color-interpolation-filters="sRGB"></filter>`);
+  }
+  document.getElementById(fid).innerHTML = `
+    <feGaussianBlur in="SourceGraphic" stdDeviation="${blurAmt}" result="src"/>
+    <feImage href="${dispUrl}" x="0" y="0" width="${w}" height="${h}" result="map"/>
+    <feDisplacementMap in="src" in2="map"
+        scale="${scale}" xChannelSelector="R" yChannelSelector="G"
+        result="bent"/>
+    <feColorMatrix in="bent" type="saturate" values="${saturation}" result="sat"/>
+    <feImage href="${specUrl}" x="0" y="0" width="${w}" height="${h}" result="spec"/>
+    <feComponentTransfer in="spec" result="specA">
+      <feFuncA type="linear" slope="${specOp}"/>
+    </feComponentTransfer>
+    <feBlend in="specA" in2="sat" mode="screen"/>
+  `;
+  el.style.backdropFilter        = `url(#${fid})`;
+  el.style.webkitBackdropFilter  = `blur(${blurAmt}px) saturate(${saturation})`;
+}
+
+// Debounce per-element resize so rapid layout reflows don't redraw
+// the canvas every frame.
+const lgPending = new WeakMap();
+const queueLG = (el, opts) => {
+  clearTimeout(lgPending.get(el));
+  lgPending.set(el, setTimeout(() => installLiquidGlass(el, opts), 80));
+};
+
+const ro = new ResizeObserver(entries => {
+  for (const e of entries) queueLG(e.target);
+});
+$$('.pane').forEach(p => { ro.observe(p); queueLG(p); });
+
+
+/* ── (7) streaming text — re-renders the target paragraph
+   character-by-character with reading-rhythm delays. Whitespace
+   stays uncollapsed via white-space: pre on the spans, so per-glyph
+   animations don't ruin line breaks. */
+const PAUSE = { ',': 110, ';': 130, ':': 100, '—': 80, '.': 220, '!': 220, '?': 220 };
+const PER_CHAR = 22;
+const streamText = (el, text) => {
+  el.classList.remove('done');
+  el.innerHTML = '';
+
+  // Real cursor element — JS reparents it during the reveal so it
+  // rides the leading edge of the wave (rather than parking at the
+  // end of the box regardless of which char is currently appearing).
+  const cursor = document.createElement('span');
+  cursor.className = 'stream-cursor';
+  el.appendChild(cursor);
+
+  let delay = 0;
+  const spans = [];
+  for (const ch of text) {
+    const span = document.createElement('span');
+    span.textContent = ch;
+    span.style.setProperty('--d', delay + 'ms');
+    el.appendChild(span);                         // appended AFTER cursor
+    spans.push({ span, delay });
+    delay += PER_CHAR + (PAUSE[ch] || 0);
+  }
+
+  // For each glyph, when its reveal begins, move the cursor to sit
+  // immediately AFTER it. The cursor then visibly walks across the
+  // line as glyphs surface, one step per glyph.
+  for (const { span, delay: d } of spans) {
+    setTimeout(() => {
+      const next = span.nextSibling;
+      if (next !== cursor) el.insertBefore(cursor, next);
+    }, d);
+  }
+
+  // hide cursor once the last glyph has settled
+  const totalMs = delay + 360;
+  setTimeout(() => el.classList.add('done'), totalMs);
+};
+const STREAM_SAMPLE =
+  "Done. Vivian's draft is queued — it'll surface in your right rail at 12:30. " +
+  "I'm watching the bank feed for the next Adobe charge so we have ground truth before you decide.";
+streamText($('#stream-target'), STREAM_SAMPLE);
+$('#replay-stream').addEventListener('click', () => streamText($('#stream-target'), STREAM_SAMPLE));
+
+/* ── (10) expanding proposal — pure CSS via interpolate-size.
+   No view transition wrapping; that was fighting the height anim. */
+$('#expand-proposal').addEventListener('click', () => {
+  $('#proposal').classList.toggle('open');
+});
+
+/* ── (3) approve = seal press
+   Toggling .sealed plays the keyframe animation. */
+$('#approve-proposal').addEventListener('click', () => {
+  const card = $('#proposal');
+  if (card.classList.contains('sealed')) return;
+  // ensure detail is open so the seal lands over content
+  card.classList.add('open', 'sealed');
+});
+
+/* ── specialist registry — slots + live state ─────────────────────
+   Mirrors how config/specialists/<id>.yaml is shaped in the real
+   Hearth: a `proactive` cadence per specialist, deliberation slots
+   in 24h time, whether the specialist's deliberation produces a
+   user-facing brief (Kate yes; Vivian/Iris no), current state and
+   flag count. Slot/state choices below are POC samples. */
+const SPECIALISTS = {
+  kate: {
+    letter: 'K', name: 'Kate', role: 'Chief of Staff',
+    slots: ['07:00', '12:30', '18:00', '22:00'], makesBrief: true,
+    state: 'ready', flags: 2, tone: 'fresh',
+    bannerHue: 34, trust: 'high',
+    greeting: "Good morning, Captain. What's on your mind?",
+    persona: "Chief of Staff. Routes work to the right specialist, runs the briefs, holds the line on tier-2b proposals. Speaks like a captain to a captain.",
+    scopes: ['agenda', 'briefs', 'delegation', 'household ops'],
+    recent: [
+      { ts: '12:24', kind: 'brief',   text: 'Composed 12:30 brief — Vivian flagged 2 charges.', status: 'queued' },
+      { ts: '11:48', kind: 'consult', text: 'Asked Dr. Anya for Bailey’s supply runway.',  status: 'answered' },
+      { ts: '07:00', kind: 'brief',   text: 'Morning brief delivered.',                          status: 'sent' },
+    ],
+  },
+  cassandra: {
+    letter: 'C', name: 'Cassandra', role: 'Security Officer',
+    slots: ['11:00', '23:00'], makesBrief: false,
+    state: 'quiet', flags: 0, tone: 'lapsed', quietDays: 19,
+    bannerHue: 268, trust: 'low',
+    greeting: "It's been a while. Sit with me a moment.",
+    persona: "Watches the perimeter — credentials, exposures, what falls apart if a single piece of trust is broken. Quiet most of the time; when she speaks, listen.",
+    scopes: ['credentials', 'exposures', 'second-order risk'],
+    recent: [
+      { ts: 'May 5', kind: 'flag',     text: 'Tailscale ACL audit clean — no new exposure.',    status: 'archived' },
+      { ts: 'Apr 2', kind: 'flag',     text: 'Compounding risk: solar production drift.',       status: 'archived' },
+      { ts: 'Mar 14',kind: 'consult',  text: 'Consulted by Kate on backup posture.',            status: 'closed' },
+    ],
+  },
+  mariah: {
+    letter: 'M', name: 'Mariah', role: 'Program Manager',
+    slots: ['09:00', '15:00', '21:00'], makesBrief: false,
+    state: 'flagged', flags: 1, tone: 'fresh',
+    bannerHue: 220, trust: 'high',
+    greeting: "Two process misses open. Want to walk them with me?",
+    persona: "Program manager + watchdog. Runs the hourly sweep over failed proposals and undelivered follow-ups, opens process misses, and chases them to close. The system’s conscience about its own commitments.",
+    scopes: ['process integrity', 'follow-ups', 'audit log', 'dispatch redo'],
+    recent: [
+      { ts: '10:14', kind: 'miss',    text: 'Iris promised a follow-up Wed; no record. Reopened.', status: 'in-flight' },
+      { ts: '09:00', kind: 'sweep',   text: 'Hourly sweep — 1 miss opened, 2 closed.',             status: 'done' },
+      { ts: 'Mon',   kind: 'audit',   text: 'Cross-checked dispatch log for week.',                status: 'archived' },
+    ],
+  },
+  anya: {
+    letter: 'A', name: 'Dr. Anya', role: 'Veterinarian',
+    slots: ['07:30', '13:00', '19:00'], makesBrief: false,
+    state: 'thinking', flags: 1, tone: 'aged',
+    bannerHue: 12, trust: 'medium',
+    greeting: "Bailey's window opens Thursday. How can I help?",
+    persona: "Veterinarian. Tracks Bailey’s transfusion window, vet appointments, prescription refills, vaccine cadence. Gentle, never alarmist — persistent when something’s drifting.",
+    scopes: ['pets', 'vet care', 'medications', 'supply runway'],
+    recent: [
+      { ts: '11:50', kind: 'flag',    text: 'Bailey transfusion window opens Thursday.', status: 'tracked' },
+      { ts: '09:12', kind: 'sweep',   text: 'Prescription refill log reviewed.',         status: 'done' },
+      { ts: '07:30', kind: 'check',   text: 'Supply runway: 11 days at current rate.',   status: 'noted' },
+    ],
+  },
+  vivian: {
+    letter: 'V', name: 'Vivian', role: 'Finance Officer',
+    slots: ['08:00', '14:00', '20:00'], makesBrief: false,
+    state: 'flagged', flags: 2, tone: 'fresh',
+    bannerHue: 142, trust: 'high',
+    greeting: "Two flags on the books. Want to walk them with me?",
+    persona: "Finance Officer. Reconciles bank feeds, flags anomalies and creeping subscriptions, drafts tier-2b proposals when she’s sure. Never sends a charge to gateway without two sources of evidence.",
+    scopes: ['banking', 'subscriptions', 'budgets', 'anomalies'],
+    recent: [
+      { ts: '11:32', kind: 'proposal', text: 'Cancel Adobe CC — unused 91 days. Net $671/yr.', status: 'awaiting' },
+      { ts: '11:15', kind: 'flag',     text: 'Recurring charge crept from $52.99 → $55.99.',    status: 'noted' },
+      { ts: '08:00', kind: 'sweep',    text: 'Morning ledger sweep — 84 txns reconciled.',      status: 'done' },
+    ],
+  },
+  trainer: {
+    letter: 'B', name: 'Beatrice', role: 'Enterprise Trainer',
+    slots: ['11:00', '17:00'], makesBrief: false,
+    state: 'ready', flags: 0, tone: 'aged',
+    bannerHue: 168, trust: 'high',
+    greeting: "Quiet on the floor. Anyone need coaching?",
+    persona: "Enterprise Trainer. Reads the audit log + the codebase, drafts PRs to improve specialists’ behavior, and coaches the staff between cycles. The reason the system gets better over time.",
+    scopes: ['training', 'persona tuning', 'codebase PRs', 'coaching'],
+    recent: [
+      { ts: 'May 20', kind: 'pr',     text: 'Drafted PR: tighten Iris’ max_tool_rounds.', status: 'awaiting review' },
+      { ts: 'May 18', kind: 'audit',  text: 'Weekly review of Kate’s brief quality.',     status: 'archived' },
+      { ts: 'May 12', kind: 'coach',  text: 'Coached Vivian on softer flag phrasing.',          status: 'closed' },
+    ],
+  },
+  iris: {
+    letter: 'I', name: 'Iris', role: 'EV & Home Automation',
+    slots: ['10:00', '16:00'], makesBrief: false,
+    state: 'ready', flags: 0, tone: 'aged',
+    bannerHue: 200, trust: 'medium',
+    greeting: "Charge levels good. Where are we going?",
+    persona: "EV + Home Automation. Routes trips with charging stops, watches HA entity drift, manages zones + automations. Doesn’t book without a nod.",
+    scopes: ['EV routing', 'home automation', 'energy', 'CalDAV'],
+    recent: [
+      { ts: '16:00', kind: 'sweep',  text: 'No trips queued for the next 14 days.',             status: 'idle' },
+      { ts: '10:00', kind: 'check',  text: 'Reviewed HA entity health — 2 sensors stale.',      status: 'flagged' },
+      { ts: 'Apr 8', kind: 'plan',   text: 'Planned EV day to the workstation — 84% SoC arrival.',    status: 'archived' },
+    ],
+  },
+  cordelia: {
+    letter: 'C', name: 'Cordelia', role: 'Master Librarian',
+    slots: ['10:30', '15:30'], makesBrief: false,
+    state: 'ready', flags: 0, tone: 'fresh',
+    bannerHue: 248, trust: 'high',
+    greeting: "Cards are in order. What are we looking for?",
+    persona: "Master Librarian. Cross-shelf write into any specialist’s library; she knows what’s already on the team’s shelves before fetching something twice. Holds the *arr connectors for media.",
+    scopes: ['cross-shelf', 'research', 'media (Sonarr/Radarr)', 'downloads'],
+    recent: [
+      { ts: '14:20', kind: 'fetch',  text: 'Pulled USDA bulletin into Brigid’s library.',  status: 'archived' },
+      { ts: '11:05', kind: 'sweep',  text: 'Deduped 6 clippings across 3 shelves.',              status: 'done' },
+      { ts: 'Wed',   kind: 'media',  text: 'Added Foundation S3 to Sonarr watch.',               status: 'tracked' },
+    ],
+  },
+  brigid: {
+    letter: 'B', name: 'Brigid', role: 'Cook',
+    slots: ['07:00', '16:00'], makesBrief: false,
+    state: 'ready', flags: 0, tone: 'fresh',
+    bannerHue: 22, trust: 'high',
+    greeting: "Pantry checked. What sounds good tonight?",
+    persona: "Cook + meal planner. Reads tomorrow’s calendar to weight quick vs slow meals, holds the household diet profiles, manages Mealie recipes. Warm-direct.",
+    scopes: ['meal planning', 'pantry', 'diets', 'Mealie'],
+    recent: [
+      { ts: '07:00', kind: 'plan',   text: 'Tonight: salmon + greens (Jasper home 6:30).',        status: 'set' },
+      { ts: 'Mon',   kind: 'check',  text: 'Pantry low on olive oil, garlic.',                   status: 'noted' },
+      { ts: 'Sun',   kind: 'plan',   text: 'Weekly meal plan — 5 dinners drafted.',              status: 'archived' },
+    ],
+  },
+  eleanor: {
+    letter: 'E', name: 'Eleanor', role: 'Master Gardener',
+    slots: ['09:00', '17:00'], makesBrief: false,
+    state: 'ready', flags: 0, tone: 'aged',
+    bannerHue: 88, trust: 'medium',
+    greeting: "Soil is waking up. Want a walk-through?",
+    persona: "Master Gardener. Holds the bed map, frost windows, succession schedule. Slower-cycle than the daily specialists but compounds across seasons.",
+    scopes: ['beds', 'frost dates', 'succession', 'weather windows'],
+    recent: [
+      { ts: '09:00', kind: 'check',  text: 'Soil temp 54°F — early greens go this weekend.',   status: 'tracked' },
+      { ts: 'Apr 22',kind: 'plan',   text: 'Drafted succession schedule for spring.',          status: 'archived' },
+      { ts: 'Apr 10',kind: 'note',   text: 'Last frost date this year: May 8.',                status: 'noted' },
+    ],
+  },
+  marguerite: {
+    letter: 'M', name: 'Marguerite', role: 'Family Historian',
+    slots: ['16:00'], makesBrief: false,
+    state: 'ready', flags: 0, tone: 'aged',
+    bannerHue: 320, trust: 'medium',
+    greeting: "Pulled an old photo today. Care to see?",
+    persona: "Family Historian. Genealogy, photo archives, the slow accumulation of the family’s story. Patient — doesn’t volunteer unless the moment is right.",
+    scopes: ['genealogy', 'photos', 'family archives', 'oral history'],
+    recent: [
+      { ts: 'May 19', kind: 'archive', text: 'Catalogued 12 photos from grandma’s box.',   status: 'archived' },
+      { ts: 'May 12', kind: 'note',    text: 'Confirmed maternal line back to 1862 in Cork.',    status: 'noted' },
+      { ts: 'Apr 30', kind: 'find',    text: 'Discovered a misattributed photo — corrected.',    status: 'archived' },
+    ],
+  },
+  maggie: {
+    letter: 'G', name: 'Maggie', role: 'Media & Collections',
+    slots: ['18:30'], makesBrief: false,
+    state: 'quiet', flags: 0, tone: 'lapsed', quietDays: 31,
+    bannerHue: 246, trust: 'medium',
+    greeting: "Found something you'd love. Got a minute?",
+    persona: "Media + Collections. Taste-graph for live shows + listening + viewing, venue calendars for places within reach. Knows you go for the room as much as the band.",
+    scopes: ['concerts', 'venues', 'listening', 'collections'],
+    recent: [
+      { ts: 'Apr 14',kind: 'find',      text: 'Lord Huron — Riverbend, Jun 12. Added to watch.', status: 'watched' },
+      { ts: 'Mar 22',kind: 'sweep',     text: 'Scraped 6 venue calendars — 3 hits.',             status: 'archived' },
+      { ts: 'Feb 9', kind: 'recommend', text: 'Suggested Khruangbin, Red Rocks. You bought.',    status: 'closed' },
+    ],
+  },
+};
+
+/* given ['07:00','12:30',...] return { next: '12:30', minsTo: 142 } */
+function nextSlot(slots, now = new Date()) {
+  if (!slots || !slots.length) return null;
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const slotsMin = slots.map(s => {
+    const [h, m] = s.split(':').map(Number);
+    return { label: s, mins: h * 60 + m };
+  }).sort((a, b) => a.mins - b.mins);
+  for (const s of slotsMin) {
+    if (s.mins > nowMin) return { next: s.label, minsTo: s.mins - nowMin };
+  }
+  // all today's slots have passed — first slot of tomorrow
+  return { next: slotsMin[0].label,
+           minsTo: (24 * 60 - nowMin) + slotsMin[0].mins };
+}
+
+/* "2h 14m" / "47m" / "3m" */
+function fmtDuration(mins) {
+  if (mins < 1) return 'now';
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
+/* state → human verb shown in the status row */
+const STATE_VERBS = {
+  ready:      'ready',
+  thinking:   'thinking…',
+  consulting: 'consulting',
+  flagged:    'flag pending',
+  quiet:      'quiet',
+};
+
+/* ── (8) specialist switch — head morphs via view transition ───── */
+const switchSpecialist = (id) => {
+  const s = SPECIALISTS[id]; if (!s) return;
+  const update = () => {
+    $$('#staff-list .staff').forEach(el =>
+      el.classList.toggle('active', el.dataset.id === id));
+    // Active-specialist hue bleeds into focus rings, chevron, etc.
+    document.documentElement.style.setProperty('--active-hue', s.bannerHue || 34);
+    // identity — real avatar image from /app/api/avatars/<id>
+    const av = $('#active-avatar');
+    av.src = `/app/api/avatars/${id}`;
+    av.alt = s.name;
+    $('#active-name').textContent   = s.name;
+    $('#active-role').textContent   = s.role;
+    // state dot + verb
+    const state = s.state || 'ready';
+    $('#active-status-dot').dataset.state = state;
+    $('#active-status-text').textContent  = STATE_VERBS[state] || state;
+    // brief/deliberation meta
+    const ns = nextSlot(s.slots);
+    const briefWord = s.makesBrief ? 'brief' : 'sweep';
+    const lastSlotLabel = (s.slots && s.slots[0]) || '—';
+    const cdEl = $('#active-countdown');
+    if (ns) {
+      $('#active-meta').firstChild.textContent =
+        `${briefWord} at ${lastSlotLabel} · next ${ns.next} `;
+      cdEl.textContent = `in ${fmtDuration(ns.minsTo)}`;
+      cdEl.classList.toggle('imminent', ns.minsTo < 5);
+    } else {
+      $('#active-meta').firstChild.textContent = 'no scheduled deliberation';
+      cdEl.textContent = '';
+    }
+    // (head avatar tone via the image itself; no seal in center rail)
+    // empty state — portrait + greeting in her voice
+    const emptyPortrait = $('#empty-portrait');
+    if (emptyPortrait) {
+      emptyPortrait.src = `/app/api/avatars/${id}`;
+      emptyPortrait.alt = s.name;
+    }
+    const emptyGreeting = $('#empty-greeting');
+    if (emptyGreeting && s.greeting) emptyGreeting.textContent = s.greeting;
+    const emptySub = $('#empty-sub');
+    if (emptySub) emptySub.textContent = `— ${s.name}`;
+    // trust meter — her confidence in her current take
+    const trustEl = $('#trust-meter');
+    const trustVal = s.trust || 'medium';
+    if (trustEl) {
+      trustEl.dataset.trust = trustVal;
+      $('#trust-text').textContent = `trust · ${trustVal}`;
+      // expand the tooltip with her trust rationale
+      trustEl.title =
+        trustVal === 'high'   ? `${s.name} has fresh sources and concrete grounding.` :
+        trustVal === 'medium' ? `${s.name} is working from second-hand or aging signals — verify before acting.` :
+                                `${s.name} is reading patterns rather than facts — treat as foresight, not record.`;
+    }
+    // flag pill
+    const fp = $('#flag-pill');
+    fp.dataset.count = s.flags;
+    fp.textContent = s.flags === 0
+      ? 'no flags'
+      : `${s.flags} ${s.flags === 1 ? 'flag' : 'flags'} pending`;
+  };
+  if (document.startViewTransition) document.startViewTransition(update);
+  else update();
+};
+$$('#staff-list .staff').forEach(el =>
+  el.addEventListener('click', () => switchSpecialist(el.dataset.id)));
+
+/* live countdown — refresh every 15s so the "in 2h 14m" stays honest */
+setInterval(() => {
+  const activeEl = $('#staff-list .staff.active');
+  if (!activeEl) return;
+  const s = SPECIALISTS[activeEl.dataset.id]; if (!s) return;
+  const ns = nextSlot(s.slots);
+  const cdEl = $('#active-countdown');
+  if (ns) {
+    cdEl.textContent = `in ${fmtDuration(ns.minsTo)}`;
+    cdEl.classList.toggle('imminent', ns.minsTo < 5);
+  }
+}, 15000);
+
+/* Stagger each seal's breath so they pulse independently — the
+   room feels populated, not synced. */
+$$('.seal').forEach((s, i) => {
+  // pseudo-random offset across the 5.4s cycle
+  const offset = ((i * 0.73) % 1) * -5.4;
+  s.style.setProperty('--breath-offset', offset.toFixed(2) + 's');
+});
+
+/* Helper: from a "who" element's text, find the speaker's SPECIALISTS id. */
+function speakerIdOf(whoEl) {
+  const txt = (whoEl?.firstChild?.textContent || whoEl?.textContent || '').trim();
+  return Object.keys(SPECIALISTS).find(id => SPECIALISTS[id].name === txt);
+}
+
+/* Provenance glyph (Tier 3 #12) — vault delta / inbox / memory.
+   The bubble's data-prov attribute picks the glyph + tone. */
+const PROV_GLYPHS = {
+  vault:  { label: 'vault',  svg: '<circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"/>' },
+  inbox:  { label: 'inbox',  svg: '<rect x="4" y="7" width="16" height="11" rx="1.6"/><path d="M4 9l8 5 8-5"/>' },
+  memory: { label: 'memory', svg: '<path d="M9 4c-3 0-5 2-5 5 0 2 1 3 2 4 0 1.5-1 2.5-1 3 0 1 1 2 2 2 1.5 0 3-1 3.5-2 2 1 5 .5 6.5-2 1.5-2.5.5-6-2-7 .5-2-1-3-3-3z"/>' },
+};
+
+/* For each assistant bubble:
+   1. Add a when-stamp showing the speaker's deliberation cadence
+   2. Set --bubble-hue inline from the speaker's bannerHue, so the
+      bubble's inner glow takes on her color identity. */
+function annotateBubbles() {
+  $$('.bubble.assistant').forEach(bubble => {
+    const who = bubble.querySelector('.who');
+    if (!who) return;
+    const sid = speakerIdOf(who);
+    if (!sid) return;
+    const s = SPECIALISTS[sid];
+    // speaker-hued bubble
+    bubble.style.setProperty('--bubble-hue', s.bannerHue || 34);
+    // provenance glyph
+    const prov = bubble.dataset.prov;
+    if (prov && PROV_GLYPHS[prov] && !who.querySelector('.who-provenance')) {
+      const wp = document.createElement('span');
+      wp.className = 'who-provenance';
+      wp.dataset.prov = prov;
+      wp.innerHTML = `<svg viewBox="0 0 24 24" class="ico" aria-hidden="true">${PROV_GLYPHS[prov].svg}</svg>${PROV_GLYPHS[prov].label}`;
+      who.appendChild(wp);
+    }
+    // deliberation when-stamp (once)
+    if (!who.querySelector('.when-stamp')) {
+      const ns = nextSlot(s.slots);
+      if (ns) {
+        const stamp = document.createElement('span');
+        stamp.className = 'when-stamp' + (s.makesBrief ? ' brief' : '');
+        stamp.textContent = s.makesBrief
+          ? `${ns.next} brief`
+          : `next sweep ${ns.next}`;
+        who.appendChild(stamp);
+      }
+    }
+  });
+}
+annotateBubbles();
+
+/* (Tier 3 #11) When the streaming text finishes on the last bubble,
+   add .listening so it breathes for 3 cycles. */
+const lastBubble = $('#last-bubble');
+const _markListening = () => {
+  if (!lastBubble) return;
+  lastBubble.classList.add('listening');
+  setTimeout(() => lastBubble.classList.remove('listening'), 2800 * 3 + 100);
+};
+// Wrap the existing streamText so we mark after the stream completes.
+const _origStream = streamText;
+window.streamText = (el, text) => {
+  _origStream(el, text);
+  // total ms calculation mirrors streamText
+  let delay = 0;
+  for (const ch of text) delay += PER_CHAR + (PAUSE[ch] || 0);
+  setTimeout(_markListening, delay + 360);
+};
+// Re-attach the replay button to the wrapped streamText
+$('#replay-stream').addEventListener('click', () => window.streamText($('#stream-target'), STREAM_SAMPLE));
+// Fire once now so the initial bubble also breathes after settle
+_markListening();
+
+/* ── Demo control panel ──────────────────────────────────────────
+   Toggles for quiet-hours, sound, empty state, + view switcher
+   that morphs the main pane via the View Transitions API. */
+const demoPanel = $('#demo-panel');
+$('#demo-panel-head').addEventListener('click', () => {
+  demoPanel.classList.toggle('collapsed');
+});
+
+// Quiet hours
+const qToggle = $('#toggle-quiet');
+qToggle.addEventListener('click', () => {
+  const on = qToggle.getAttribute('aria-pressed') !== 'true';
+  qToggle.setAttribute('aria-pressed', on);
+  document.body.classList.toggle('quiet-hours', on);
+});
+
+// Empty state
+const eToggle = $('#toggle-empty');
+const convoEl = $('#convo');
+const emptyEl = $('#empty-convo');
+eToggle.addEventListener('click', () => {
+  const on = eToggle.getAttribute('aria-pressed') !== 'true';
+  eToggle.setAttribute('aria-pressed', on);
+  emptyEl.hidden = !on;
+  // hide bubbles when in empty mode
+  $$('#convo > .bubble').forEach(b => b.style.display = on ? 'none' : '');
+});
+
+// Sound (Tier 3 #14) — synthesized chimes via WebAudio. Off by
+// default; tap a glyph in the convo to trigger sample chimes.
+const sToggle = $('#toggle-sound');
+let audioCtx = null;
+const chime = (freq, dur = 0.6, type = 'sine') => {
+  if (sToggle.getAttribute('aria-pressed') !== 'true') return;
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const t0 = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t0);
+  // subtle warble for warmth
+  osc.frequency.linearRampToValueAtTime(freq * 0.985, t0 + dur);
+  gain.gain.setValueAtTime(0, t0);
+  gain.gain.linearRampToValueAtTime(0.06, t0 + 0.03);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(t0);
+  osc.stop(t0 + dur);
+};
+sToggle.addEventListener('click', () => {
+  const on = sToggle.getAttribute('aria-pressed') !== 'true';
+  sToggle.setAttribute('aria-pressed', on);
+  if (on) chime(659.25, 0.5);   // E5 acknowledgment
+});
+// chime hooks:
+//   send → soft mid tone
+//   approve → ascending two-note (C-G)
+//   consult fire → high gentle bell
+$('#send-btn').addEventListener('click', () => chime(523.25, 0.5));
+$('#approve-proposal').addEventListener('click', () => {
+  chime(523.25, 0.35); setTimeout(() => chime(783.99, 0.6), 180);
+});
+const _origFireDemoThread = fireDemoThread;
+fireDemoThread = () => { _origFireDemoThread(); chime(987.77, 0.7, 'triangle'); };
+
+// View switcher (Tier 3 #15) — morphs main pane between views
+const VIEWS = {
+  convo:    [$('#empty-convo'), convoEl, $('.composer')],
+  library:  [$('#view-library')],
+  settings: [$('#view-settings')],
+};
+let currentView = 'convo';
+const switchView = (name) => {
+  if (name === currentView) return;
+  const apply = () => {
+    // hide all
+    [...Object.values(VIEWS)].flat().forEach(el => { if (el) el.style.display = 'none'; });
+    // show target
+    VIEWS[name].forEach(el => { if (el) el.style.display = ''; });
+    $$('.demo-view-btn').forEach(b =>
+      b.setAttribute('aria-pressed', b.dataset.view === name));
+    currentView = name;
+    // empty-convo should stay hidden unless its own toggle is on
+    if (name === 'convo' && eToggle.getAttribute('aria-pressed') !== 'true') {
+      emptyEl.style.display = 'none';
+    }
+  };
+  if (document.startViewTransition) document.startViewTransition(apply);
+  else apply();
+};
+$$('.demo-view-btn').forEach(b =>
+  b.addEventListener('click', () => switchView(b.dataset.view)));
+// init: hide empty + stub views
+emptyEl.style.display = 'none';
+$('#view-library').style.display = 'none';
+$('#view-settings').style.display = 'none';
+
+/* ── Bubble feedback trainer (Tier 2 #7) ──────────────────────────
+   Hover an assistant bubble → 👍 / 👎 picker fades in. Up = sealed
+   chip ("👍 1"); appends a positive note to the specialist's
+   memory.md at the API layer (stubbed in this POC). Down = opens
+   an inline "what didn't work?" field so the specialist gets the
+   concrete reason, not just a vote. */
+const FEEDBACK_KINDS = [
+  { id: 'up',   icon: 'ico-thumbs-up',   tip: 'Worked — train more like this' },
+  { id: 'down', icon: 'ico-thumbs-down', tip: 'Did not land — tell her why' },
+];
+
+function attachReactions(bubble) {
+  if (bubble.dataset.reactWired) return;
+  if (!bubble.classList.contains('assistant')) return;   // only on her replies
+  bubble.dataset.reactWired = '1';
+
+  const tray = document.createElement('div');
+  tray.className = 'reactions';
+  bubble.appendChild(tray);
+
+  const picker = document.createElement('div');
+  picker.className = 'reaction-picker';
+  for (const k of FEEDBACK_KINDS) {
+    const b = document.createElement('button');
+    b.className = 'reaction-pick-btn';
+    b.type = 'button';
+    b.title = k.tip;
+    b.dataset.kind = k.id;
+    b.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#${k.icon}"/></svg>`;
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (k.id === 'up') {
+        bumpOrPlaceChip(tray, 'up', 'ico-thumbs-up');
+        recordFeedback(bubble, 'up', null);
+      } else {
+        openDownField(bubble, tray);
+      }
+    });
+    picker.appendChild(b);
+  }
+  bubble.appendChild(picker);
+}
+
+function bumpOrPlaceChip(tray, kind, iconId) {
+  let chip = tray.querySelector(`.reaction-chip[data-g="${kind}"]`);
+  if (chip) {
+    const cnt = chip.querySelector('.reaction-count');
+    cnt.textContent = (+cnt.textContent + 1).toString();
+  } else {
+    chip = document.createElement('span');
+    chip.className = 'reaction-chip';
+    chip.dataset.g = kind;
+    chip.innerHTML =
+      `<svg class="ico" aria-hidden="true"><use href="#${iconId}"/></svg>` +
+      `<span class="reaction-count">1</span>`;
+    tray.appendChild(chip);
+  }
+}
+
+/* Presets for the down-feedback multi-choice (mirrors the prod
+   `question_set` AskUser pattern: structured options the specialist
+   can act on directly, with an "Other" fallback to free text). */
+const DOWN_OPTIONS = ['Too long', 'Wrong tone', 'Inaccurate', 'Wrong timing', 'Other…'];
+
+function openDownField(bubble, tray) {
+  let field = bubble.querySelector('.feedback-down-field');
+  if (field) return;
+
+  field = document.createElement('div');
+  field.className = 'feedback-down-field qset';
+  field.innerHTML = `
+    <span class="feedback-down-prompt">What didn't work?</span>
+    <div class="qset-options"></div>
+    <button class="feedback-down-skip" type="button" title="Skip">×</button>
+  `;
+  const opts = field.querySelector('.qset-options');
+  for (const label of DOWN_OPTIONS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'qset-opt';
+    b.textContent = label;
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (label === 'Other…') {
+        // morph the field into a text input for free-form reason
+        opts.innerHTML = '';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.placeholder = 'tell her in your own words';
+        opts.appendChild(input);
+        input.focus();
+        input.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter')  closeWith(input.value.trim() || 'other');
+          if (ev.key === 'Escape') closeWith(null);
+        });
+      } else {
+        closeWith(label);
+      }
+    });
+    opts.appendChild(b);
+  }
+  bubble.appendChild(field);
+
+  function closeWith(text) {
+    bumpOrPlaceChip(tray, 'down', 'ico-thumbs-down');
+    recordFeedback(bubble, 'down', text);
+    field.remove();
+  }
+  field.querySelector('.feedback-down-skip').addEventListener('click', () =>
+    closeWith(null));
+}
+
+function recordFeedback(bubble, kind, text) {
+  // In prod this would POST to /app/api/feedback with:
+  //   { specialist_id, bubble_id, kind, text, excerpt, ts }
+  // The server appends a line to Knowledge/<Specialist>/memory.md
+  // for her next deliberation pass to read.
+  const who = bubble.querySelector('.who');
+  const sid = speakerIdOf(who);
+  const excerpt = (bubble.querySelector('p')?.textContent || '').slice(0, 80);
+  console.log('[feedback]', { specialist: sid, kind, text, excerpt });
+}
+
+$$('.bubble').forEach(attachReactions);
+
+// Boot — fill the head with Kate's live state on first paint
+switchSpecialist('kate');
+
+/* ── Discord-style profile modal ──────────────────────────────────
+   Triggered by clicking any specialist's wax seal. Closes via the
+   X button, Esc, or click on the backdrop. */
+const profileModal = $('#profile-modal');
+const profileCard  = $('#profile-card');
+
+const openProfile = (id) => {
+  const s = SPECIALISTS[id]; if (!s) return;
+  // identity
+  $('#profile-name').textContent   = s.name;
+  $('#profile-role').textContent   = s.role;
+  // real avatar image (prod endpoint serves image or fallback SVG)
+  const pav = $('#profile-avatar');
+  pav.src = `/app/api/avatars/${id}?t=${Date.now()}`;
+  pav.alt = s.name;
+  // banner: real image as base, warm gold tint via CSS overlay
+  const banner = $('#profile-banner');
+  banner.style.setProperty('--banner-hue', s.bannerHue || 34);
+  banner.style.setProperty('--banner-image', `url("/app/api/banners/${id}?t=${Date.now()}")`);
+  // meta line
+  const ns = nextSlot(s.slots);
+  const state = s.state || 'ready';
+  const verb  = STATE_VERBS[state] || state;
+  const brief = s.makesBrief ? 'brief' : 'sweep';
+  $('#profile-meta-line').innerHTML = `
+    <span><span class="state-dot" data-state="${state}"></span> ${verb}</span>
+    <span class="sep">·</span>
+    <span>${brief} at ${s.slots[0]}</span>
+    ${ns ? `<span class="sep">·</span><span>next ${ns.next} (in ${fmtDuration(ns.minsTo)})</span>` : ''}
+    ${s.quietDays ? `<span class="sep">·</span><span>${s.quietDays} days quiet</span>` : ''}
+    ${s.flags ? `<span class="sep">·</span><span>${s.flags} flag${s.flags === 1 ? '' : 's'}</span>` : ''}
+  `;
+  // body
+  const body = $('#profile-body');
+  body.innerHTML = '';
+
+  // persona
+  const personaSec = document.createElement('div');
+  personaSec.className = 'profile-section';
+  personaSec.innerHTML = `
+    <h3>About ${escape(s.name)}</h3>
+    <div class="profile-card-inner profile-persona">${escape(s.persona)}</div>
+  `;
+  body.appendChild(personaSec);
+
+  // knowledge scopes
+  if (s.scopes?.length) {
+    const scopesSec = document.createElement('div');
+    scopesSec.className = 'profile-section';
+    scopesSec.innerHTML = `
+      <h3>Knowledge scope</h3>
+      <div class="profile-chips">
+        ${s.scopes.map(sc => `<span class="profile-chip">${escape(sc)}</span>`).join('')}
+      </div>
+    `;
+    body.appendChild(scopesSec);
+  }
+
+  // recent activity
+  if (s.recent?.length) {
+    const recentSec = document.createElement('div');
+    recentSec.className = 'profile-section';
+    recentSec.innerHTML = `
+      <h3>Recent activity</h3>
+      <div class="profile-card-inner" style="padding: 6px 8px;">
+        <div class="profile-list">
+          ${s.recent.map(r => `
+            <div class="profile-list-item">
+              <span class="ts">${escape(r.ts)}</span>
+              <span class="kind">${escape(r.kind)}</span>
+              <span class="text">${escape(r.text)}</span>
+              <span class="status">${escape(r.status)}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+    body.appendChild(recentSec);
+  }
+
+  // actions — keep only the benign action here. Destructive operations
+  // (retire, archive memory, transfer) live behind the "⋯" admin
+  // overflow at the top of the card, not in the primary view.
+  const actionsSec = document.createElement('div');
+  actionsSec.className = 'profile-section';
+  actionsSec.innerHTML = `
+    <h3>Quick actions</h3>
+    <div class="profile-actions">
+      <button class="btn btn-glass">Take ${escape(s.name)} aside</button>
+    </div>
+  `;
+  body.appendChild(actionsSec);
+
+  profileModal.hidden = false;
+  // close active user-menu if it's open, so they don't stack
+  if (!userMenu.hidden) closeMenu();
+  // focus the close button for keyboard a11y
+  setTimeout(() => $('#profile-close').focus(), 50);
+};
+
+const closeProfile = () => { profileModal.hidden = true; };
+
+const escape = (s) => String(s ?? '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// Profile-open handlers via capture-phase delegation so they survive
+// any restructure / re-rendering and don't depend on attaching during
+// boot. Capture phase lets us intercept seal clicks BEFORE they
+// bubble through .staff (where switchSpecialist would also fire).
+document.addEventListener('click', (e) => {
+  // 1) Seal in the left rail → open that specialist's profile
+  const sealInList = e.target.closest('#staff-list .staff .seal');
+  if (sealInList) {
+    e.stopPropagation();
+    const li = sealInList.closest('.staff');
+    if (li?.dataset.id) openProfile(li.dataset.id);
+    return;
+  }
+  // 2) Anywhere on the head-trigger (avatar / name / role / status)
+  //    → open the active specialist's profile
+  if (e.target.closest('#head-trigger')) {
+    const activeLi = document.querySelector('#staff-list .staff.active');
+    openProfile(activeLi?.dataset.id || 'kate');
+    return;
+  }
+}, true);  // ← capture phase
+
+// Admin overflow — placeholder for the tucked-away danger zone
+// (retire, archive memory, transfer ownership). For the POC this
+// just toasts a hint at where those actions live.
+$('#profile-admin').addEventListener('click', (e) => {
+  e.stopPropagation();
+  alert('Admin actions — retire, archive memory, transfer — live here.\nIntentionally tucked away from the primary profile view.');
+});
+
+// Close handlers — X button, Escape key, click on backdrop (but not card)
+$('#profile-close').addEventListener('click', closeProfile);
+profileModal.addEventListener('click', (e) => {
+  if (e.target === profileModal) closeProfile();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !profileModal.hidden) closeProfile();
+});
+
+/* ── (9) consult thread — see corresponding CSS block ─────────────
+   Choreography: a thread is drawn from sender → receiver over ~480ms,
+   then holds for ~2.4s while a pulse-dot travels the path, then
+   fades out over ~420ms. The receiver's seal gets a brief expanding
+   ring at the moment the thread connects.
+   Kinds: `consults` (default), `delegates` (Kate→staff with handoff),
+   `raises` (staff→Kate with an interrupt). Kind drives the label. */
+const threadSvg   = $('#consult-thread');
+const threadPath  = $('#thread-path');
+const threadMotes = $('#thread-motes');
+const threadRecv  = $('#thread-recv');
+let threadAnimId = null;
+let threadTimers = [];
+
+// particle pool — pre-create N <circle>s and recycle them so we don't
+// thrash the DOM mid-animation. 14 covers a generous stream + reuse.
+const MOTE_COUNT = 14;
+const MOTES = [];
+for (let i = 0; i < MOTE_COUNT; i++) {
+  const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  c.setAttribute('class', 'thread-mote');
+  c.setAttribute('cx', -10);
+  c.setAttribute('cy', -10);
+  c.setAttribute('r',  2);
+  threadMotes.appendChild(c);
+  MOTES.push({ el: c, active: false, t: 0, life: 0, spawn: 0,
+               size: 2, jitterSeed: Math.random() * 6.28 });
+}
+
+// The thread routes entirely INSIDE the staff pane: there is a
+// natural empty column between the right edge of even the longest
+// specialist name and the pane's right border. Motes leave the END
+// of the sender's name, travel right into that interior column,
+// flow down/up through it, and re-enter the END of the receiver's
+// name. Never crosses any text; never spills into the next pane.
+const GUTTER_INSET = 22;        // px from pane's right edge
+const CORNER_R     = 8;
+
+const sizeThread = () => {
+  const pane = threadSvg.parentElement;
+  const r = pane.getBoundingClientRect();
+  threadSvg.setAttribute('width',  r.width);
+  threadSvg.setAttribute('height', r.height);
+  threadSvg.style.width  = r.width  + 'px';
+  threadSvg.style.height = r.height + 'px';
+  threadSvg.style.right  = '0';
+  threadSvg.dataset.paneW = r.width;
+};
+sizeThread();
+window.addEventListener('resize', sizeThread);
+
+// Anchor point at the END of a specialist's name text, vertically
+// aligned with the seal's center. .staff-meta has width: max-content
+// so its right edge IS the right edge of the text.
+const endOfName = (staffLi, host) => {
+  const meta = staffLi.querySelector('.staff-meta');
+  const seal = staffLi.querySelector('.seal');
+  const hr   = host.getBoundingClientRect();
+  const mr   = meta.getBoundingClientRect();
+  const sr   = seal.getBoundingClientRect();
+  return {
+    x: Math.min(mr.right - hr.left + 8, hr.width - GUTTER_INSET - 16),
+    y: sr.top + sr.height / 2 - hr.top,
+  };
+};
+
+// Manhattan-routed path with rounded corners, staying entirely
+// inside the pane. The gutter is at the pane's right inset.
+const computeInteriorPath = (a, b, paneW) => {
+  const gx = paneW - GUTTER_INSET;
+  const r  = CORNER_R;
+  const dy = Math.sign(b.y - a.y) || 1;
+  if (Math.abs(b.y - a.y) < 2) {
+    return { d: `M${a.x},${a.y} L${b.x},${b.y}`, gutterX: gx };
+  }
+  const d = [
+    `M ${a.x} ${a.y}`,
+    `H ${gx - r}`,
+    `Q ${gx} ${a.y} ${gx} ${a.y + dy * r}`,
+    `V ${b.y - dy * r}`,
+    `Q ${gx} ${b.y} ${gx - r} ${b.y}`,
+    `H ${b.x}`,
+  ].join(' ');
+  return { d, gutterX: gx };
+};
+
+const cancelThreadAnim = () => {
+  cancelAnimationFrame(threadAnimId);
+  threadTimers.forEach(clearTimeout);
+  threadTimers = [];
+};
+
+const fireThread = (fromLi, toLi, kind = 'consults') => {
+  if (!fromLi || !toLi || fromLi === toLi) return;
+  cancelThreadAnim();
+
+  const host  = threadSvg.parentElement;
+  const a     = endOfName(fromLi, host);
+  const b     = endOfName(toLi,   host);
+  const paneW = +threadSvg.dataset.paneW || host.getBoundingClientRect().width;
+  const { d, gutterX } = computeInteriorPath(a, b, paneW);
+
+  threadPath.setAttribute('d', d);
+  const len = threadPath.getTotalLength();
+
+  // soft warm gather at the receiver's end-of-name (not on the seal)
+  threadRecv.setAttribute('cx', b.x - 2);
+  threadRecv.setAttribute('cy', b.y);
+  void kind; // kind no longer surfaced as text — receiver-name glow conveys it
+
+  // receiver name pulses in a soft warm glow as motes arrive
+  const recvName = toLi.querySelector('.staff-name');
+  recvName?.classList.add('receiving');
+  // role line briefly says "hearing from X" — adds context without
+  // requiring a floating label
+  const recvRole = toLi.querySelector('.staff-role');
+  const fromName = SPECIALISTS[fromLi.dataset.id]?.name || '';
+  let prevRole = null;
+  if (recvRole && fromName) {
+    prevRole = recvRole.textContent;
+    recvRole.dataset.prevText = prevRole;
+    recvRole.innerHTML = `<em style="opacity:0.9;font-style:italic;">hearing from ${fromName}</em>`;
+  }
+
+  threadSvg.classList.remove('drawing', 'holding', 'fading');
+  void threadSvg.getBoundingClientRect();
+  threadSvg.classList.add('drawing');
+
+  // ── particle choreography — slow, gentle, breath-paced ─────────
+  // Three phases:
+  //   drawing  (0  → drawMs)            : ramping up, opacity fades in
+  //   holding  (drawMs → drawMs+holdMs) : full emission window
+  //   fading   (after stopSpawn)        : no new motes; loop continues
+  //                                       until the LAST in-flight mote
+  //                                       completes its natural life
+  // The thread fades out as gracefully as it fades in — each mote
+  // rides its envelope to zero opacity instead of being snapped off.
+  const drawMs = 520;
+  const holdMs = 4600;
+  const spawnInterval = 420;
+  const moteLifeBase  = 3100;
+  const startTime = performance.now();
+  const stopSpawn = startTime + drawMs + holdMs;
+
+  MOTES.forEach(m => {
+    m.active = false;
+    m.el.setAttribute('cx', -10);
+    m.el.style.opacity = 0;
+  });
+  let lastSpawn = 0;
+  const findFreeMote = () => MOTES.find(m => !m.active);
+
+  const envelope = (t) => {
+    if (t < 0.20) return (t / 0.20) * 0.70;
+    if (t > 0.78) return Math.max(0, (1 - t) / 0.22) * 0.70;
+    return 0.70;
+  };
+
+  const tick = (now) => {
+    if (now <= stopSpawn && now - lastSpawn >= spawnInterval) {
+      const m = findFreeMote();
+      if (m) {
+        m.active = true;
+        m.spawn  = now;
+        m.life   = moteLifeBase * (0.85 + Math.random() * 0.30);
+        m.size   = 1.4 + Math.random() * 1.2;
+        m.jitterSeed = Math.random() * 6.28;
+        m.el.setAttribute('r', m.size.toFixed(2));
+        lastSpawn = now;
+      }
+    }
+
+    let anyActive = false;
+    for (const m of MOTES) {
+      if (!m.active) continue;
+      const age = now - m.spawn;
+      const t   = age / m.life;
+      if (t >= 1) {
+        m.active = false;
+        m.el.style.opacity = 0;
+        continue;
+      }
+      anyActive = true;
+      const pt = threadPath.getPointAtLength(t * len);
+      const lookahead = Math.min(len, t * len + 0.6);
+      const ahead = threadPath.getPointAtLength(lookahead);
+      const tx = ahead.x - pt.x, ty = ahead.y - pt.y;
+      const tlen = Math.hypot(tx, ty) || 1;
+      const nx = -ty / tlen, ny = tx / tlen;
+      const wobble = Math.sin((age / 520) + m.jitterSeed) * 1.4
+                   + Math.sin((age / 230) + m.jitterSeed * 2) * 0.5;
+      m.el.setAttribute('cx', (pt.x + nx * wobble).toFixed(2));
+      m.el.setAttribute('cy', (pt.y + ny * wobble).toFixed(2));
+      m.el.style.opacity = envelope(t).toFixed(3);
+    }
+
+    // Keep ticking while we're still emitting OR any mote is in flight.
+    if (now <= stopSpawn || anyActive) {
+      threadAnimId = requestAnimationFrame(tick);
+    } else {
+      // Truly done — the last mote finished its envelope. Release the
+      // receiving glow + drop the .fading class + restore role text.
+      threadAnimId = null;
+      threadSvg.classList.remove('drawing', 'holding', 'fading');
+      recvName?.classList.remove('receiving');
+      if (recvRole && recvRole.dataset.prevText) {
+        recvRole.textContent = recvRole.dataset.prevText;
+        delete recvRole.dataset.prevText;
+      }
+    }
+  };
+  threadAnimId = requestAnimationFrame(tick);
+
+  // Phase-class transitions (purely visual signaling — the tick loop
+  // owns the actual end-of-life cleanup now).
+  threadTimers.push(setTimeout(() => {
+    threadSvg.classList.replace('drawing', 'holding');
+  }, drawMs));
+  threadTimers.push(setTimeout(() => {
+    threadSvg.classList.replace('holding', 'fading');
+  }, drawMs + holdMs));
+};
+
+// Demo cycle: walk through the three call kinds so the user can see
+// each in turn (consults · delegates · raises). Slow cadence — these
+// are warm conversations, not network packets.
+const DEMO_KINDS = ['consults', 'delegates', 'raises'];
+let demoKindIdx = 0;
+const fireDemoThread = () => {
+  const activeLi = $('#staff-list .staff.active');
+  const others   = $$('#staff-list .staff:not(.active)');
+  if (!activeLi || !others.length) return;
+  const otherLi = others[Math.floor(Math.random() * others.length)];
+  const kind    = DEMO_KINDS[demoKindIdx++ % DEMO_KINDS.length];
+  if (kind === 'raises') fireThread(otherLi, activeLi, kind);
+  else                   fireThread(activeLi, otherLi, kind);
+};
+setTimeout(fireDemoThread, 2400);
+setInterval(fireDemoThread, 9500);
+</script>
+
+</body>
+</html>

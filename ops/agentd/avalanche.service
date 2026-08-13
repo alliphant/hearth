@@ -1,0 +1,48 @@
+# ops/agentd/avalanche.service — reference systemd --user unit for agentd on the workstation.
+#
+# This is the CANONICAL copy. The live unit lives at
+#   ~/.config/systemd/user/agentd.service
+# on the workstation; keep the two byte-identical. `ops/agentd/deploy.sh --check`
+# diffs the live unit against this file and fails on drift.
+#
+# WHY the AGENTD_* Environment= overrides exist:
+# source/src/config.ts is deliberately PORTABLE — its defaults assume a
+# vanilla install (~/.mozilla/firefox, /run/agentd-wake, ~/.config/agentd/
+# activity.sh). the workstation is not vanilla, so each box-specific value is
+# supplied here as an Environment= override instead of being hard-coded back
+# into config.ts (that hard-coding is exactly the drift this reconciles):
+#   AGENTD_ACTIVITY_SCRIPT     — bespoke activity probe in hearthoperator/bin,
+#                                 not the ~/.config/agentd/activity.sh default
+#   AGENTD_WAKE_MARKER_DIR     — /run/avalanche-wake is provisioned by the
+#                                 root-owned /etc/tmpfiles.d/avalanche-wake.conf;
+#                                 config.ts's /run/agentd-wake default does not
+#                                 exist on this box
+#   AGENTD_FIREFOX_PROFILE_BASE — XDG-flavor Plasma keeps profiles under
+#                                 ~/.config/mozilla/firefox; ~/.mozilla/firefox
+#                                 does not exist here
+#
+# If you change a box-specific path, change it HERE and re-run
+# `deploy.sh --check` — do not reintroduce the value into config.ts.
+[Unit]
+Description=Hearth agentd — LAN browser daemon
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/bun run /home/jasper/hearthoperator/agentd/src/main.ts
+WorkingDirectory=/home/jasper/hearthoperator/agentd
+Restart=on-failure
+RestartSec=3
+Environment="AGENTD_PORT=4446"
+Environment="AGENTD_BIND=0.0.0.0"
+Environment="AGENTD_TOKEN_FILE=/home/jasper/.config/agentd/token"
+Environment="AGENTD_ACTIVITY_SCRIPT=/home/jasper/hearthoperator/bin/avalanche-activity.sh"
+Environment="AGENTD_WAKE_MARKER_DIR=/run/avalanche-wake"
+Environment="AGENTD_FIREFOX_PROFILE_BASE=/home/jasper/.config/mozilla/firefox"
+# Tunables intentionally not pinned via Environment= so they can be
+# overridden via `systemctl --user set-environment AGENTD_DRAIN_SECONDS=30`
+# during tests. Defaults are baked into agentd's config.ts.
+PassEnvironment=AGENTD_DRAIN_SECONDS AGENTD_SUSPEND_CMD AGENTD_IDLE_THRESHOLD_SECONDS AGENTD_DEBUG AGENTD_WAKE_ACK_WINDOW_SECONDS
+
+[Install]
+WantedBy=default.target

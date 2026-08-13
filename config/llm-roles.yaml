@@ -1,0 +1,744 @@
+# ── 2026-07-30 (LANE SPLIT: interactive vs deep, two RTX 6000 Adas) ──────
+#    the LLM host gained a SECOND RTX 6000 Ada (48 GB), replacing the RTX PRO 4000
+#    Blackwell. Until now EVERY text role below pointed at :8200 — chat, voice,
+#    deliberation, sub-agent delegation, research, librarian, reflection all
+#    shared FOUR slots on ONE card that was also running LaurTTS, parakeet STT
+#    and Frigate detection. A voice turn queued behind the nightly deliberation
+#    sweep: exactly the pathology the 2026-06-06 block below describes from the
+#    3090 era, which was masked by moving to a bigger card rather than fixed.
+#
+#      :8200  ORIGINAL Ada  GPU-6d06a9c8…  -np 4  INTERACTIVE + voice
+#             specialist, planner, live, arbiter
+#             (co-located with LaurTTS :8023 + parakeet STT :8093 + Frigate —
+#              these are SEQUENTIAL within a voice turn, so they don't contend)
+#
+#      :8201  NEW Ada       GPU-510eee08…  -np 8  DEEP + background
+#             specialist_thinking, specialist_deliberation, research_extract,
+#             specialist_drafter, deep_consult, reflector, scribe_writer,
+#             concierge_drafter, librarian
+#
+#    Same model + sampling on both lanes deliberately — the win is separation,
+#    not a bigger brain. systemd --user units: llamacpp-35b-glacier.service
+#    (:8200) and llamacpp-35b-deep-glacier.service (:8201), both Linger=yes.
+#    The deep roles carry max_concurrency: 8 to match the server's real slot
+#    count; per the mutex note below, ALL roles on one base_url must agree.
+#    BOOT-loaded (no hot-reload) → restart hearth-orchestrator after editing.
+#
+# LLM role → provider mapping. Edit to swap models or move inference.
+#
+# ── 2026-06-24 (backend swap: vLLM → STOCK llama.cpp, for grammar tool-calling) ─
+#    The :8200 deep+interactive tier (Qwen3.6-35B-A3B) now runs on **stock
+#    llama.cpp b9782** — host binary at /home/jasper/llm/builds/llama.cpp-stable,
+#    systemd --user unit `llamacpp-35b-glacier.service` (linger=yes → survives
+#    reboot) — REPLACING the `vllm-deep` container. Why: `--jinja` grammar-
+#    CONSTRAINED tool-call decoding — the decoder physically can't emit a malformed
+#    call, which kills the vLLM tail (tool-call-as-text / garbled args). The Unsloth
+#    Qwen3.6-35B-A3B-UD-Q5_K_XL GGUF runs coherently here (the beellama fork garbled
+#    this exact model into a ///// loop; stock llama.cpp does not). Serving:
+#    `--ctx-size 98304 -np 2` (49K/slot; deep deliberation peaks ~45K), q8_0 KV,
+#    `-fa on`, `-ngl 999`, Ada-pinned (CUDA_VISIBLE_DEVICES=GPU-6d06a9c8). think-OFF
+#    is honored NATIVELY per-request via `chat_template_kwargs:{enable_thinking:false}`
+#    (exactly what openai.ts sends). The base_url/model fields below are UNCHANGED
+#    (:8200 / qwen36-35b-a3b) — only the backend swapped, so no role edit + no
+#    orchestrator restart was needed. ✅ 2026-07-03: the server now runs `-np 4` +
+#    `--ctx-size 196608` (4 real slots × 49152/slot — bumped for Kate sub-agent
+#    delegation: chat + a delegate + background work no longer contend for 2 slots;
+#    measured 36.3/49.1 GB on the Ada post-bump, llama-server itself ~28 GB). The
+#    roles' `max_concurrency: 4` now matches the server's real slot count.
+#    Unit backup: llamacpp-35b-glacier.service.bak-np2.
+#    ⚠ 2026-07-30: the `docker start vllm-deep` ROLLBACK this block used to name is
+#    GONE — the container, the vllm/vllm-openai:cu130-nightly image, and the 35 GB
+#    /docker/models/Qwen3.6-35B-A3B-FP8 checkpoint were all deleted (receipt at
+#    /docker/models/RETIRED-2026-07-30-vllm-deep-inventory.txt). It had sat exited
+#    since 2026-06-24 and was no longer a viable rollback: the deep tier has since
+#    moved twice more — onto the Heretic Q5_K_M weights, then onto its own :8201
+#    lane in the two-Ada split — so starting it would have restored a config
+#    predating the lane split, the `judgment` role, and the 122B judge. Rebuilding
+#    that tier on vLLM now means re-pulling both the image and the weights. See
+#    docs/design-inference-fleet-loadout.md + the 2026-06-24 ship-log entry. (The
+#    80B/forza/vLLM/qwen3_xml-parser language in the dated blocks + per-role
+#    comments below is now superseded history.)
+#
+# ── 2026-06-10 (deep tier → glacier 6000 Ada): the 35B-A3B deep tier MOVED off
+#    forza onto glacier's new RTX 6000 Ada (48 GB). The 9 deep roles' base_url is
+#    now http://host.docker.internal:8200/v1 (the `vllm-deep` container, UUID-pinned
+#    to the Ada GPU-6d06a9c8), NOT forza :8090. Context: the glacier→the workstation
+#    chassis migration swapped the 3090+A4000 for a 6000 Ada (48 GB, deep) + RTX 4000
+#    Blackwell (24 GB, 9B+STT). forza keeps VISION (:8096, unchanged below) + RAG
+#    (:8091, moving to forza) + Laur TTS. BOOT-loaded → restart hearth-orchestrator.
+#
+# ── 2026-06-07 (deep-tier swap): the forza deep tier is now Qwen3.6-35B-A3B (FP8),
+#    NOT the 80B-A3B-Thinking the block below describes. See the "DEEP + background
+#    TEXT tier" header further down + docs/design-inference-fleet-loadout.md for the
+#    bench that drove it (think-OFF default, qwen3_xml parser). Interactive 9B + the
+#    vision/RAG tiers are unchanged from re-tier #2 below.
+#
+# ── 2026-06-06 (re-tier #2): interactive 9B + deep 27B-on-Spark ────────────
+# Problem this fixed: the `live` tier (typed chat + voice) shared the the LLM host
+# 3090 :8088 SINGLE llama.cpp slot (-np 1; DFlash spec-decode corrupts output at
+# -np ≥ 2, so the slot can't be widened) with the nightly deliberation sweep +
+# awareness loops + grooming. Every voice turn QUEUED behind background work —
+# the same trivial voice query measured 7.5 / 16.3 / 20.8 / 7.5 s back-to-back
+# (a free slot is ~2 s). Fix = (a) give the interactive tier its OWN multi-slot
+# lane, and (b) move all heavy/background work off the interactive box.
+#
+# New three-box topology (LAN-only; forza = 192.168.0.188, the LLM host = <your-llm-host-ip>):
+#   • 3090  (:8088, default endpoint) — INTERACTIVE tier. Qwen3.5-9B Q8 GGUF on
+#     beellama.cpp, -np 4 (multi-slot, NO DFlash — for interactive, not-queuing
+#     beats single-stream spec speed). Serves: specialist, planner, live,
+#     voice_realtime. think OFF everywhere (chat is think-off; faithfulness is
+#     the grounding stack + fact_critic, not the model). Hard sub-questions
+#     escalate to the forza 27B via consult_deep_model. All four roles MUST carry
+#     concurrent:true + max_concurrency:4 — the endpoint mutex is keyed by
+#     base_url and the FIRST role to resolve :8088 fixes its slot count; one
+#     un-flagged role would build a 1-slot mutex and serialize the others.
+#     (There is no Qwen3.6-9B — the 3.6 generation ships only the dense 27B + the
+#     35B-A3B MoE; Qwen3.5-9B is the same-lineage dense sibling, native 262K ctx
+#     so 16–24K serving needs no rope scaling.)
+#   • forza / DGX Spark (:8090) — DEEP + background TEXT tier. Qwen3-Next-80B-A3B
+#     -Thinking-NVFP4 on vLLM continuous batching (--max-num-seqs 4, 131K ctx).
+#     SPARSE (~3B active/token) WITH a thinking channel. Why not the dense 27B the
+#     directive first chose: the GB10's ~273 GB/s unified memory makes a dense 27B
+#     read ~27 GB/token → only ~8 tok/s, so think-ON consults TIME OUT and a brief
+#     would take ~8 min. A sparse A3B reads ~3 GB/token → ~39 tok/s AND still
+#     reasons — the right fit for the GB10's bandwidth. Serves the text deep roles:
+#     specialist_deliberation, deep_consult (text), research_extract, librarian +
+#     the background drafting/reflection roles. ONE shared 4-slot mutex.
+#   • forza / DGX Spark (:8096) — VISION tier. Qwen3.6-27B-FP8 (natively VL) on a
+#     SECOND vLLM container, low memory (vision is low-frequency). The 80B is
+#     text-only, so the image path (Cordelia classifier + image consults, via the
+#     `vision` role) lands here. Slow decode is fine — VL descriptions are short.
+#   • A4000 (:8091) — RAG tier (infinity embeddings + rerank). Unchanged.
+#
+# NEVER set `concurrent` on the 3090 with DFlash: the interactive 9B is -np 4
+# WITHOUT DFlash, which is safe — but the 27B deep unit that used to live on
+# :8088 was -np1 + DFlash, and -np ≥ 2 + DFlash corrupts output (garbled
+# fragments / </think> spam / 500s, validated 2026-06-06). The deep tier moved
+# to forza precisely so it can batch without DFlash.
+#
+# llm-roles.yaml is BOOT-loaded (ConfigLLMRouter readFileSync once; NO chokidar
+# watcher) — a change needs `docker compose restart hearth-orchestrator`.
+#
+# Older history (forza Spark cutover, two-tier 9B+35B, ollama→openai migration)
+# lives in architecture.md "the LLM host — the primary LLM host" + the month ship logs.
+#
+# ════════════════════════════════════════════════════════════════════════════
+# ── CURRENT TOPOLOGY (2026-07-30) — supersedes every dated block above ──────
+# Everything above this line is HISTORY (kept for the reasoning); the boxes,
+# ports and models it names (3090 :8088, A4000 :8089, the forza 80B :8090/
+# :8096 vLLM pair) are all RETIRED. What actually serves today:
+#
+#   the LLM host Ada #1 (GPU-6d06a9c8): :8200 INTERACTIVE — Qwen3.6-35B-A3B
+#     Heretic Q5_K_M, -np 4. Roles: specialist, planner, live, arbiter,
+#     voice_realtime(behavior). Co-located: LaurTTS :8023, STT :8093,
+#     Frigate, embeddings/rerank :8091 (infinity), plex.
+#   the LLM host Ada #2 (GPU-510eee08): :8201 DEEP — same 35B, -np 8, 49152/slot
+#     (nine background roles + `judgment`). :8203 VISION — Qwen3.6-27B
+#     Q4_K_M + f16 mmproj (the `vision` role; 3s glances).
+#   forza DGX Spark (192.168.0.188): :8090 BIG JUDGE — Qwen3.5-122B-A10B
+#     UD-Q4_K_XL, natively VL, `--ctx-size 131072 -np 2` = **65536/slot**
+#     (`deep_consult`, `court_judge_deep`, `specialist_deliberation_deep`).
+#     Also ComfyUI Krea2 :8188 + a TTS trial.
+#     (⚠ 2026-08-02: this line read "-np 2 × 16384" — stale by 4×. It
+#     predated the 2026-07-31 unit bump the per-role comment at
+#     `court_judge_deep` already recorded. forza is the LARGEST per-slot
+#     window in the fleet, not the smallest; the old figure argued against
+#     routing anything context-hungry here, which was backwards.)
+#   Xeon CPU: :8202 status_flavor (1.5B, zero VRAM).
+#
+#   PER-SLOT WINDOWS AT A GLANCE (ctx-size ÷ np — the number that actually
+#   binds a request; a role's context_window_tokens must stay UNDER it with
+#   room for the request envelope):
+#     :8200 interactive  196608 ÷ 4 = 49152   (roles declare 16384 — a
+#                                              deliberate MODEL-coherence cap,
+#                                              not a hardware one; see `specialist`)
+#     :8201 deep         393216 ÷ 8 = 49152   (roles declare 49152 — EXACTLY the
+#                                              slot, i.e. zero envelope margin.
+#                                              A prompt at the cap 400s: kristi
+#                                              hit 49393 on 2026-08-02.)
+#     :8090 forza        131072 ÷ 2 = 65536
+#   ⚠ Both Adas run ~98% full (≈1 GB free of 49 GB each), so raising a lane's
+#   TOTAL ctx-size is not available — per-slot can only grow by lowering -np.
+#
+# OPENAI_BASE_URL (the fallback for any role without base_url) points at the
+# :8200 interactive lane — never at a retired port.
+# ════════════════════════════════════════════════════════════════════════════
+
+roles:
+  # ── INTERACTIVE tier — Qwen3.6-35B-A3B on the the LLM host RTX 6000 Ada (:8200) ──
+  # ⚠ 2026-06-23: live/specialist/planner MOVED off the 3090/Blackwell 9B (:8088)
+  # ONTO the 35B-A3B deep endpoint (:8200), because the 9B fabricated saves — it
+  # would say "I've recorded X" on a declarative statement ("Sam's email is …")
+  # and emit NO tool call. The 35B reliably SPENDS the tool call (the Law-#1 fix:
+  # a capable model, not a regex/force patch). think OFF; sparse A3B (~52 tok/s) so
+  # chat stays ~5-6s. TRADE-OFF: interactive now SHARES the Ada's ONE 4-slot vLLM
+  # mutex with the deep roles, so a chat turn can queue behind a deliberation
+  # sweep (7am/12:30/6pm/10pm). voice_realtime's def still names the 9B, but voice
+  # resolves its endpoint via `live` (provider_role:'live') so voice rides the 35B
+  # too. The per-role comments below still say "9B/:8088" — stale; the base_url +
+  # model fields are the truth. (The 9B llama-server stays loaded on the Blackwell
+  # but is now idle.)
+
+  # Conversational chat turn — the fast interactive path. think OFF is strictly
+  # better for chat (THINK_OFF_CHAT_BRIEF.md): identical accuracy, no new
+  # fabrication, far faster. Faithfulness comes from the grounding stack +
+  # fact_critic; hard synthesis escalates via consult_deep_model (forza 27B).
+  specialist:
+    provider: openai
+    base_url: http://host.docker.internal:8200/v1
+    model: qwen36-35b-a3b
+    temperature: 0.7
+    think: false
+    concurrent: true
+    max_concurrency: 4
+    # Hard cap so a stuck generation can't blow a chat-turn budget. A normal
+    # reply is 100–600 tokens; research_workload specialists raise it per-YAML.
+    max_tokens: 2000
+    # 16384 — REVERTED here 2026-07-29 after a same-day attempt at 49152.
+    #
+    # The server does serve 49152/slot (`--ctx-size 196608 -np 4`), and the
+    # nine deep roles below declare it, so 16384 looks like a leftover from
+    # the retired 3090 9B unit its old comment described. It is not safe to
+    # raise on that reasoning alone: the deep roles run ONE long analytical
+    # pass, while chat re-feeds a growing transcript every turn.
+    #
+    # Measured at 49152: Kate's slot reached n_tokens=35816 (truncated=0, so
+    # the SERVER was fine) and she degenerated into a 4000-token repetition
+    # loop — "I'm done. I will output the markdown line." over and over until
+    # the generation cap stopped it. A 35B-A3B has only ~3B active parameters
+    # and loses coherence well before the context runs out, so the ceiling
+    # that binds chat is the MODEL's usable range, not the slot size. The old
+    # value was inadvertently holding it inside that range.
+    #
+    # Raising this again means finding where coherence actually breaks —
+    # bisect (24576, then 32768) against a long real thread and watch for
+    # repetition, not just for truncated=0.
+    context_window_tokens: 16384
+    # Hard per-request ceiling: the 8200 per-slot window. The line above is
+    # the COHERENCE target and stays where the measurement put it.
+    max_prompt_tokens: 49152
+
+  # Think-ON chat variant — DORMANT for chat (the think-off A/B won; see
+  # THINK_OFF_CHAT_BRIEF.md). Kept defined for a future opt-in, homed on the
+  # :8201 deep lane so if re-enabled it lands on the deep tier, not the chat lane.
+  specialist_thinking:
+    provider: openai
+    base_url: http://host.docker.internal:8201/v1
+    model: qwen36-35b-a3b
+    temperature: 0.7
+    think: true
+    preserve_thinking: true
+    concurrent: true
+    max_concurrency: 8
+    max_tokens: 4000
+    context_window_tokens: 49152
+    # Same number, two jobs: this role reasons well right up to its slot.
+    # Stated explicitly so the trimmer is not guessing.
+    max_prompt_tokens: 49152
+
+  # Light structured-JSON parse (the proposal edit-instruction parser). A quick
+  # parse, interactive-adjacent → stays on the 9B. MUST carry the :8088 mutex flags.
+  planner:
+    provider: openai
+    base_url: http://host.docker.internal:8200/v1
+    model: qwen36-35b-a3b
+    temperature: 0.4
+    think: false
+    concurrent: true
+    max_concurrency: 4
+    max_tokens: 800
+    context_window_tokens: 16384
+    # Hard per-request ceiling: the 8200 per-slot window. The line above is
+    # the COHERENCE target and stays where the measurement put it.
+    max_prompt_tokens: 49152
+
+  # LLM-JUDGE guard lane (2026-07-30): fact_critic, brief_critic,
+  # proposal_critic, data_denial, fabricated_save. These used to ride `planner`
+  # on :8200 — every guard call inside a chat turn contended for the interactive
+  # lane's 4 slots AND could evict a conversation's cached prefix from a slot,
+  # forcing the NEXT chat turn into a full re-eval (the same cost the 2026-07-30
+  # KV-prefix fix removed). Judges are latency-tolerant single-shot JSON
+  # verdicts → the deep lane's 8 mostly-idle slots. Per-call pins (temp 0.1,
+  # think:false, per-guard max_tokens) win over these defaults since the
+  # defaults-spread fix; the defaults here mirror them for calls that don't pin.
+  # Code degrades to `planner` routing if this role is removed (judgment_role()
+  # in src/core/llm.ts) — the guards stay alive either way.
+  judgment:
+    provider: openai
+    base_url: http://host.docker.internal:8201/v1
+    model: qwen36-35b-a3b
+    temperature: 0.1
+    think: false
+    concurrent: true
+    max_concurrency: 8
+    max_tokens: 1200
+    context_window_tokens: 49152
+    # Same number, two jobs: this role reasons well right up to its slot.
+    # Stated explicitly so the trimmer is not guessing.
+    max_prompt_tokens: 49152
+
+  # Agent-room ARBITER (2026-07-21): the "who speaks next" pick in a multi-agent
+  # room — a tiny structured JSON task (return 1-2 participant ids). Its OWN role
+  # so it's independently tunable and swappable. Runs on the :8200 interactive
+  # lane. (The original owner intent — a free dedicated lane on the idle 9B —
+  # died with the :8088 box in the chassis migration; post-lane-split the
+  # interactive lane IS uncontended by background work, which was the point.)
+  arbiter:
+    provider: openai
+    base_url: http://host.docker.internal:8200/v1
+    model: qwen36-35b-a3b
+    temperature: 0.3
+    think: false
+    concurrent: true
+    max_concurrency: 4
+    max_tokens: 200
+    context_window_tokens: 16384
+    # Hard per-request ceiling: the 8200 per-slot window. The line above is
+    # the COHERENCE target and stays where the measurement put it.
+    max_prompt_tokens: 49152
+
+  # Voice prompt-shape on the INTERACTIVE tier. This role is primarily a
+  # BEHAVIOR profile: _prompt_mode() keys on the ROLE NAME `voice_realtime` to
+  # pick the slim voice prompt, while the voice message route supplies the
+  # ENDPOINT separately via provider_role:'live' (+ llm_role:'voice_realtime',
+  # set per-turn for surface:'voice') — so voice and chat always hit the same
+  # lane. The explicit base_url/model below exist so a DIRECT resolution of
+  # this role lands somewhere real: until 2026-07-30 it had no base_url and
+  # fell back to OPENAI_BASE_URL, which pointed at the retired :8088 (dead) —
+  # with a 9B model name nothing serves. Truthful config, same behavior.
+  voice_realtime:
+    provider: openai
+    base_url: http://host.docker.internal:8200/v1
+    model: qwen36-35b-a3b
+    temperature: 0.4
+    think: false
+    concurrent: true
+    max_concurrency: 4
+    max_tokens: 200
+    context_window_tokens: 16384
+    # Hard per-request ceiling: the 8200 per-slot window. The line above is
+    # the COHERENCE target and stays where the measurement put it.
+    max_prompt_tokens: 49152
+
+  # Interactive chat tier — chat.ts routes every typed chat turn here
+  # (tier:'live'); the voice message route uses provider_role:'live' so voice and
+  # chat ALWAYS resolve the same endpoint (no second endpoint to keep in sync).
+  # think OFF. On the :8200 interactive lane with its own 4 slots → never queues
+  # behind deliberation (which lives on the :8201 deep lane). Voice caps tighter
+  # per-turn via max_tokens_override (~200) in the message route.
+  live:
+    provider: openai
+    base_url: http://host.docker.internal:8200/v1
+    model: qwen36-35b-a3b
+    temperature: 0.4
+    think: false
+    concurrent: true
+    max_concurrency: 4
+    max_tokens: 2000
+    context_window_tokens: 16384
+    # Hard per-request ceiling: the 8200 per-slot window. The line above is
+    # the COHERENCE target and stays where the measurement put it.
+    max_prompt_tokens: 49152
+
+  # ── STATUS-FLAVOR tier — tiny CPU model for the live "thinking" line ────────
+  # Generates the contextual gerund status phrase shown under the typing bubble
+  # ("<Name> is reconciling thermal shock concerns with consistent cold brew
+  # methods…"). Cosmetic + NON-interactive + FAIL-OPEN: any miss falls back to
+  # the deterministic tool→label line, so it never blocks or breaks a turn. Runs
+  # on a tiny llama.cpp on the LLM host's Xeon (Sapphire Rapids / AMX) in SYSTEM RAM,
+  # deliberately OFF both GPUs so it can't contend with chat / voice / deep.
+  # DARK until HEARTH_STATUS_FLAVOR=1 AND this endpoint is up — see
+  # src/core/status_flavor.ts + ops/status-flavor/README.md. An unreachable
+  # base_url is harmless: the provider is built lazily and never called while
+  # disabled, and a live miss fail-opens. Recommended model: Llama-3.2-1B-Instruct
+  # or Qwen2.5-1.5B-Instruct (Q5/Q6). think OFF, tiny output, short timeout.
+  status_flavor:
+    provider: openai
+    base_url: http://host.docker.internal:8202/v1
+    # Deployed 2026-06-12: Qwen2.5-1.5B-Instruct Q4_K_M via the llama.cpp server
+    # container (ghcr.io/ggml-org/llama.cpp:server). This `model` is a label only —
+    # llama.cpp serves whatever gguf the container loaded and ignores the request's
+    # model name. See ops/status-flavor/README.md.
+    model: qwen2.5-1.5b-instruct
+    temperature: 0.85
+    think: false
+    max_tokens: 32
+    timeout_ms: 4000
+    context_window_tokens: 4096
+
+  # ── DEEP + background TEXT tier — Qwen3.6-35B-A3B on the the LLM host RTX 6000 Ada ──
+  # (:8200, stock llama.cpp Q5_K_XL since 2026-06-24 — see the top block; the
+  # "FP8/forza/:8090/vLLM/--max-num-seqs/qwen3_xml" details below are stale history.)
+  # (2026-06-07: swapped FROM Qwen3-Next-80B-A3B-Thinking after a same-box bench.
+  # The 80B-Thinking checkpoint CANNOT think-off — so structured output rambled:
+  # deliberation-envelope JSON 20% @ 28-56s, and research_extract's think:false was
+  # ignored. The Qwen3.6-35B-A3B is a HYBRID-thinking checkpoint, same generation
+  # as the 9B/27B: think-OFF gives 52 t/s + 100% clean JSON @ 2.1s; think-ON stays
+  # available for deep_consult. Measured +33% decode vs the 80B and lighter on the
+  # GB10's unified memory. See docs/design-inference-fleet-loadout.md.)
+  # Sparse A3B (~3B active), FP8, vLLM continuous batching, --max-num-seqs 4,
+  # 49K ctx. SPARSE because the GB10 is memory-bandwidth-bound (~273 GB/s) — a
+  # dense 27B managed only ~8 tok/s; an A3B amortizes the weight-read. base_url
+  # 192.168.0.188:8090/v1 → ONE shared 4-slot mutex; every role sets
+  # concurrent:true + max_concurrency:4. served-model-name `qwen36-35b-a3b` (old
+  # `qwen3-next-80b-a3b-thinking` kept as a serving alias for clean transition).
+  # ⚠ The container MUST use `--tool-call-parser qwen3_xml` (NOT hermes — Qwen3.6
+  # emits the `<function=…><parameter=…>` XML format; hermes silently 0%s tools).
+  # think-OFF is the deep-tier DEFAULT (faster + 100% envelope JSON); only
+  # deep_consult + specialist_thinking run think-ON. VISION is NOT here (text-only
+  # model) — image work routes to the `vision` role on :8096.
+  # NVFP4 (22GB, faster) is the future target once forza's vLLM build stops
+  # throwing `KeyError: w2_input_scale` on the Qwen3.6 NVFP4 checkpoint.
+
+  # Scheduled reflective passes — Kate's morning brief, Anya's review, etc.
+  # think OFF (2026-06-07): the 35B hybrid emits the deliberation envelope far more
+  # reliably think-off (100% clean JSON @ 2.1s vs the 80B-Thinking's 20% @ 28-56s),
+  # and grounding/fact_critic — not the think channel — carry correctness here. (A/B
+  # think-on later if Kate's synthesis wants it; verify the ```json fence lands.)
+  # temp 0.3 keeps the brief on verified context (Durable-Truth); the provenance
+  # validator + fact_critic are the backstops.
+  specialist_deliberation:
+    provider: openai
+    base_url: http://host.docker.internal:8201/v1
+    model: qwen36-35b-a3b
+    temperature: 0.3
+    think: false
+    preserve_thinking: true
+    concurrent: true
+    max_concurrency: 8
+    timeout_ms: 240000
+    max_tokens: 4000
+    context_window_tokens: 49152
+    # Same number, two jobs: this role reasons well right up to its slot.
+    # Stated explicitly so the trimmer is not guessing.
+    max_prompt_tokens: 49152
+
+  # Background research extraction — Kristi's scheduled spec/price/leak/swimlane
+  # passes. Accuracy-critical reads that FEED deliberation. think OFF (it emits
+  # structured rows). 4000-tok budget so a long GPU/spec list doesn't truncate.
+  research_extract:
+    provider: openai
+    base_url: http://host.docker.internal:8201/v1
+    model: qwen36-35b-a3b
+    concurrent: true
+    max_concurrency: 8
+    temperature: 0.3
+    think: false
+    timeout_ms: 240000
+    max_tokens: 4000
+    context_window_tokens: 49152
+    # Same number, two jobs: this role reasons well right up to its slot.
+    # Stated explicitly so the trimmer is not guessing.
+    max_prompt_tokens: 49152
+
+  # Voice-imitation draft generation (Kate writing in Jasper's voice). Background,
+  # quality over latency → forza. think OFF (2026-06-07 — deep-tier default; the
+  # 35B drafts cleanly in one pass, no reasoning ramble needed for register/tone).
+  specialist_drafter:
+    provider: openai
+    base_url: http://host.docker.internal:8201/v1
+    model: qwen36-35b-a3b
+    temperature: 0.7
+    preserve_thinking: true
+    think: false
+    concurrent: true
+    max_concurrency: 8
+    max_tokens: 2800
+    context_window_tokens: 49152
+    # Same number, two jobs: this role reasons well right up to its slot.
+    # Stated explicitly so the trimmer is not guessing.
+    max_prompt_tokens: 49152
+
+  # Escalation target for consult_deep_model — a chat/voice turn hands a hard,
+  # scoped sub-question here for a one-shot deep answer. think ON (depth is the
+  # whole reason to escalate).
+  # 2026-07-30: THE BIG JUDGE — Qwen3.5-122B-A10B UD-Q4_K_XL on forza :8090
+  # (llamacpp-122b-forza.service; ~77GB in the DGX Spark's 121GB unified
+  # memory, the one model too big for a 48GB Ada). Benched at spin-up: 3.1s
+  # for a 52-token judgment answer, 6.5s for a ~1K-token image look. The
+  # model is natively VL with an f16 mmproj, so consult_deep_model's
+  # image_path works here too — this is the "really look at this" escalation
+  # above the local :8203 27B glance tier. Latency-tolerant work ONLY; the
+  # interactive + deep 35B lanes stay on the LLM host.
+  # max_concurrency matches the server's -np 2; deep_consult is the only
+  # role on this base_url (the mutex rule). context_window_tokens = the
+  # per-slot size the unit actually serves — the runtime budgets against it.
+  # 2026-07-31: RAISED 16384 → 65536 with the unit (--ctx-size 131072 -np 2).
+  # The complexity gate routes a WHOLE Kate turn here via provider_role, and
+  # her full prompt (~11K persona + tool schemas + grounding + history) was
+  # 26-28K — three 400s in a week, each surfacing as "I ran into a problem
+  # responding". KV on this arch is 51 KiB/token (2 kv-heads × 256 head-dim ×
+  # 48 layers @ q8_0), so 4× the window cost ~4.9 GiB on a box with headroom.
+  deep_consult:
+    provider: openai
+    base_url: http://192.168.0.188:8090/v1
+    model: qwen35-122b-a10b
+    temperature: 0.5
+    think: true
+    preserve_thinking: true
+    concurrent: true
+    max_concurrency: 2
+    timeout_ms: 300000
+    max_tokens: 4000
+    context_window_tokens: 65536
+    # Same number, two jobs: this role reasons well right up to its slot.
+    # Stated explicitly so the trimmer is not guessing.
+    max_prompt_tokens: 65536
+
+  # THE MEASURED SWAP EXPERIMENT (2026-07-30): one proposal-court lens seat —
+  # picked by HEARTH_COURT_DEEP_SEAT in hearth.env (a seat id, e.g. `mariah`;
+  # unset = experiment off, all seats on specialist_deliberation) — votes with
+  # the 122B big judge instead of the 35B. Model diversity is what decorrelates
+  # a bench (the court's own 2026-07-02 finding), and the 122B is the most
+  # different brain in the fleet. Every proposal_court_verdict audit row
+  # stamps `deep_seat` so agreement epochs split cleanly; grade by comparing
+  # the court scorecard (owner-agreement, ≥0.90 bar) before/after the flip
+  # date. Same base_url as deep_consult → max_concurrency MUST stay 2 (the
+  # first role to resolve an endpoint fixes its mutex slot count), and
+  # context_window_tokens MUST track deep_consult's — same server, same slot.
+  court_judge_deep:
+    provider: openai
+    base_url: http://192.168.0.188:8090/v1
+    model: qwen35-122b-a10b
+    temperature: 0.2
+    think: false
+    concurrent: true
+    max_concurrency: 2
+    timeout_ms: 300000
+    max_tokens: 2000
+    context_window_tokens: 65536
+    # Same number, two jobs: this role reasons well right up to its slot.
+    # Stated explicitly so the trimmer is not guessing.
+    max_prompt_tokens: 65536
+
+  # DELIBERATION ON THE BIG JUDGE (2026-08-02). An ENDPOINT profile for a
+  # specialist whose deliberation is context-hungry and latency-indifferent,
+  # selected per-specialist via `proactive.deliberate_on_role` (the named
+  # generalization of the older `deliberate_on_live` boolean). The BEHAVIOR
+  # stays `specialist_deliberation` — same structured-JSON prompt, same
+  # tools_for_deliberation curation; only the provider/model/window move,
+  # exactly like `provider_role: 'librarian'` before it.
+  #
+  # Why it exists: kristi's 18:30 pass 400'd at 49393 tokens against :8201's
+  # 49152/slot. Her round0 baseline alone is ~29K and tool results push it to
+  # the cap, so she needs a bigger window than the deep lane HAS — and both
+  # Adas are ~98% full, so it cannot be bought there. forza serves 65536/slot.
+  #
+  # Sampling MIRRORS specialist_deliberation, deliberately — this is not a
+  # smarter-brain knob, it's a bigger-window one:
+  #   • think: false is LOAD-BEARING. The deliberation envelope lands as clean
+  #     JSON ~100% think-off vs ~20% think-on (2026-06-07 bench). Do NOT copy
+  #     deep_consult's `think: true` here — it would break envelope parsing and
+  #     the failure looks like "the specialist produced nothing," not a crash.
+  #   • temperature 0.3 keeps the pass on verified context (Durable-Truth).
+  # max_concurrency: 2 matches deep_consult / court_judge_deep — the endpoint
+  # mutex is keyed by base_url and ALL roles sharing one must agree.
+  #
+  # ⚠ COST OF THE LANE, know it before opting another specialist in: forza is
+  # a GB10 (~273 GB/s unified) running an A10B — ~3× the per-token weight read
+  # of the 35B-A3B, and prompt eval measures ~782 tok/s. A 49K prompt is ~63 s
+  # of PREFILL per round before a token is generated. timeout_ms is per-CALL,
+  # so 300 s is ample per round, but a 20-round pass is genuinely slow — this
+  # lane is for scheduled background work, NEVER for anything a person waits on.
+  # It also shares forza's TWO slots with the proposal court and deep consults;
+  # a long pass here can make the judge queue.
+  specialist_deliberation_deep:
+    provider: openai
+    base_url: http://192.168.0.188:8090/v1
+    model: qwen35-122b-a10b
+    temperature: 0.3
+    think: false
+    preserve_thinking: true
+    concurrent: true
+    max_concurrency: 2
+    timeout_ms: 300000
+    max_tokens: 4000
+    context_window_tokens: 65536
+    # Same number, two jobs: this role reasons well right up to its slot.
+    # Stated explicitly so the trimmer is not guessing.
+    max_prompt_tokens: 65536
+
+  # VERA ON THE BIG JUDGE (2026-07-31). Vera is the adversarial half of the
+  # code-review chain — she critiques the change Beatrice authored. She had no
+  # `llm_role`, so she resolved the DEFAULT tier and ran on the same 35B that
+  # wrote the diff: an author and its critic sharing weights share blind
+  # spots, which is most of what a second opinion is supposed to buy.
+  #
+  # This is the same reasoning `court_judge_deep` above states — "model
+  # diversity is what decorrelates a bench (the court's own 2026-07-02
+  # finding)" — applied to the review chain instead of the court, and the
+  # 122B is the most different brain in the fleet.
+  #
+  # think: FALSE deliberately. The 2026-07-02 scrutiny bench found think-ON
+  # gave NO accuracy gain on exactly this family (30/33 vs 31/33 think-OFF)
+  # at 14x latency, which is why HEARTH_SCRUTINY_THINK stays unset. A critique
+  # is judgment, not derivation.
+  #
+  # max_tokens 3000 (vs the court lens's 2000): a lens casts a vote, Vera
+  # writes findings with file:line anchors and a blocker/concern/nit split.
+  #
+  # ⚠ SHARES forza :8090 WITH deep_consult + court_judge_deep, so
+  # max_concurrency MUST stay 2 — the first role to resolve an endpoint fixes
+  # its mutex slot count, and the server is -np 2. The second slot is the
+  # vision lane (the 122B is natively VL with an f16 mmproj), so do NOT
+  # "simplify" forza to 1 slot x 32k to buy Vera context.
+  #
+  # ✅ 2026-07-31: CONTEXT IS NOW 65536/slot, still at -np 2 — the unit went
+  # `--ctx-size 32768` → `131072`, so Vera got 4x the room WITHOUT the 1-slot
+  # trade the paragraph below warned against. KV on this arch is 51 KiB/token
+  # (2 kv-heads x 256 head-dim x 48 layers @ q8_0), so the whole raise cost
+  # ~4.9 GiB and the vision slot stayed. The old note stands as the reasoning:
+  #
+  #   CONTEXT WAS 16384/slot — SMALLER than the 35B's 49K. Measured against 21
+  #   real change records the fit is comfortable (avg 2,872 chars, max 9,456
+  #   ~= 2.4k tokens, zero truncated), so `read_change_for_critique`'s
+  #   llm_budget: 12_000 is a ceiling reality never approaches. The variable is
+  #   her CODEBASE reads — if a critique ever overflows, cap those (ranged
+  #   reads / outline mode) before touching the diff budget, which is the
+  #   evidence she is actually reviewing.
+  #
+  # That variable is now far less likely to bind, and `enforce_prompt_window`
+  # evicts oldest history rather than 400ing if it ever does. What has NOT
+  # changed is the clock: 782 tok/s prompt eval means a full 65K slot is ~84 s
+  # to ingest, so a maximal Vera critique is minutes, not seconds.
+  critic_review:
+    provider: openai
+    base_url: http://192.168.0.188:8090/v1
+    model: qwen35-122b-a10b
+    temperature: 0.2
+    think: false
+    concurrent: true
+    max_concurrency: 2
+    timeout_ms: 300000
+    max_tokens: 3000
+    context_window_tokens: 65536
+    # Same number, two jobs: this role reasons well right up to its slot.
+    # Stated explicitly so the trimmer is not guessing.
+    max_prompt_tokens: 65536
+
+  # Pattern/behaviour analysis (observe_jasper_voice, scan_program_patterns).
+  # Load-bearing — Mariah's fuzzy roster sweep runs through it. Background → the
+  # :8201 deep lane.
+  reflector:
+    provider: openai
+    base_url: http://host.docker.internal:8201/v1
+    model: qwen36-35b-a3b
+    temperature: 0.3
+    think: false
+    concurrent: true
+    max_concurrency: 8
+    context_window_tokens: 49152
+    # Same number, two jobs: this role reasons well right up to its slot.
+    # Stated explicitly so the trimmer is not guessing.
+    max_prompt_tokens: 49152
+
+  # Prose generation for vault writes + library ingest (distill_jasper_style,
+  # save_library_item title/summary). Background, non-interactive — depth over
+  # latency → the :8201 deep lane.
+  scribe_writer:
+    provider: openai
+    base_url: http://host.docker.internal:8201/v1
+    model: qwen36-35b-a3b
+    temperature: 0.7
+    think: false
+    concurrent: true
+    max_concurrency: 8
+    context_window_tokens: 49152
+    # Same number, two jobs: this role reasons well right up to its slot.
+    # Stated explicitly so the trimmer is not guessing.
+    max_prompt_tokens: 49152
+
+  # The daily relationship brief (surface_relationship_signal). Quality-critical
+  # reasoning + drafting → the :8201 deep lane.
+  concierge_drafter:
+    provider: openai
+    base_url: http://host.docker.internal:8201/v1
+    model: qwen36-35b-a3b
+    temperature: 0.7
+    think: false
+    concurrent: true
+    max_concurrency: 8
+    context_window_tokens: 49152
+    # Same number, two jobs: this role reasons well right up to its slot.
+    # Stated explicitly so the trimmer is not guessing.
+    max_prompt_tokens: 49152
+
+  # Careful background verification — Cordelia's durable-curation drain and the
+  # Durable-Truth async-consult lane. think OFF (2026-06-07 deep-tier default); a
+  # longer budget + timeout since it reads tool output and reasons over sources.
+  librarian:
+    provider: openai
+    base_url: http://host.docker.internal:8201/v1
+    model: qwen36-35b-a3b
+    temperature: 0.3
+    preserve_thinking: true
+    think: false
+    concurrent: true
+    max_concurrency: 8
+    timeout_ms: 240000
+    max_tokens: 4000
+    context_window_tokens: 49152
+    # Same number, two jobs: this role reasons well right up to its slot.
+    # Stated explicitly so the trimmer is not guessing.
+    max_prompt_tokens: 49152
+
+  # ── VISION tier — Qwen3.6-27B (natively VL) LOCAL on the LLM host Ada #2 (:8203) ─
+  # 2026-07-30: moved off forza (was FP8 under vLLM at 192.168.0.188:8096 —
+  # ~21s per glance on the bandwidth-bound DGX Spark) onto the LLM host next to the
+  # deep lane: llama.cpp, Q4_K_M decoder + FULL-F16 mmproj vision encoder
+  # (quantization never touches the image features). Benched on a live Frigate
+  # frame, identical prompt: 3.0s vs 21.0s, and the local Q4 read the on-frame
+  # timestamp overlay + caught a second person the FP8 output missed. systemd
+  # user unit llamacpp-27b-vl-glacier.service, GPU-510eee08 (Ada #2), 2 slots
+  # × 8192 = the same per-request budget the forza server had.
+  # WHAT ROUTES HERE (corrected 2026-07-31 — the old note named the wrong
+  # caller and cost a session two wrong turns): the HIGH-VOLUME perception
+  # path only — analyze_image_direct (Cordelia's classifier,
+  # src/connectors/vl.ts) and one proposal_court lens. The camera-vision
+  # consumers (classify_camera_scene, face_sightings, the person_tracks
+  # probe) were removed with Frigate on 2026-08-04.
+  # **consult_deep_model does NOT route here** — since 2026-07-30 it sends
+  # BOTH text and image consults to `deep_consult` (the 122B on forza, which
+  # is natively VL). Interpretation goes there; triage stays here.
+  # The OpenAI provider attaches image_url to whatever endpoint this resolves to.
+  # think OFF is LOAD-BEARING: the 3.6-27B is hybrid-thinking — think-on eats
+  # the token budget as reasoning_content and returns EMPTY content.
+  # HARD imagery escalation target: `deep_consult` — the Qwen3.5-122B-A10B on
+  # forza, LIVE since 2026-07-30 (this line used to say "planned … once it's
+  # serving"; it has been serving for a while).
+  # SIZING (benchmarked 2026-07-31, 16 real Frigate frames + hand-verified
+  # ground truth): this role holds 18.4 GB at ~2% duty (~420 req/day,
+  # requests_deferred 0). A Qwen3-VL-4B agreed 15/16 and matched the 122B on
+  # receipt OCR, but FAILED the plush-toy false positive this layer exists to
+  # catch (the backyard camera boxes a stuffed animal as person 58–69%) — and
+  # failed it inconsistently. Do not downsize without re-running that case.
+  # Own 2-slot mutex.
+  vision:
+    provider: openai
+    # 2026-08-15 interim: the :8203 VL unit is retired-disabled; vision serves
+    # from the deep lane's f16 mmproj on :8201 (the live loadout). The full
+    # one-brain re-tier of this file lands with the qwen38-one-brain merge —
+    # this line just keeps main pointing at a port that exists.
+    base_url: http://host.docker.internal:8201/v1
+    model: qwen-vl
+    temperature: 0.1
+    think: false
+    concurrent: true
+    max_concurrency: 2
+    max_tokens: 600
+    context_window_tokens: 8192
+
+  # ── RAG tier — embeddings + rerank on the A4000 (:8091) ────────────────────
+  # infinity (michaelf34/infinity) serving bge-large + bge-reranker. OpenAI-compat
+  # at ROOT (/embeddings, /rerank) — NO /v1 prefix — addressed by full HF id.
+  # Live since RAG Phase 2 (HEARTH_RAG_VECTOR=1 in hearth.env). base_url is
+  # host-local (same box as the orchestrator), never the tailnet.
+  embeddings:
+    provider: openai
+    base_url: http://host.docker.internal:8091
+    model: BAAI/bge-large-en-v1.5
+
+  reranker:
+    provider: openai
+    base_url: http://host.docker.internal:8091
+    model: BAAI/bge-reranker-v2-m3

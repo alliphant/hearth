@@ -1,0 +1,21 @@
+## Per-user notification preferences.
+#
+# Referenced by users.yaml's notification_config_ref. Hot-reloaded by
+# chokidar — edits take effect on the next push without restarting Hearth.
+#
+# Severity ladder: low < medium < medium-high < high. A `push_threshold`
+# of "high" means only that severity (or above) passes; "low" means any
+# severity passes. Pushes blocked by quiet hours queue in pending_pushes
+# and dispatch automatically when the window ends.
+
+default_user:
+  quiet_hours:
+    start: "22:00"
+    end: "07:00"
+    timezone: "America/Denver"
+  push_thresholds:
+    during_quiet_hours: "high"
+    outside_quiet_hours: "low"
+  # User-initiated messages from Telegram are never blocked by quiet
+  # hours; only Hearth → user pushes are gated.
+  user_messages_always_through: true

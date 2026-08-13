@@ -1,0 +1,64 @@
+# ops/agentd/avalanche-idle-stamp.service — the idle sensor agentd reads.
+#
+# Follows the host-profile convention of this directory (<profile>.service,
+# <profile>-activity.sh, <profile>-idle-stamp.service); deploy.sh pushes it to
+# ~/.config/systemd/user/agentd-idle-stamp.service on the box and drift-checks
+# it. First install on a new box also needs the package and the enable:
+#   sudo pacman -S swayidle          # Arch/CachyOS; apt: swayidle
+#   ops/agentd/deploy.sh             # pushes the unit
+#   ssh avalanche 'bash -lc "systemctl --user daemon-reload && \
+#     systemctl --user enable --now agentd-idle-stamp.service"'
+#
+# WHY THIS EXISTS
+#
+# agentd needs to know how long it has been since the human touched the machine.
+# Under KWin/Wayland there is no way to ask for that from a shell:
+#   - org.freedesktop.ScreenSaver GetSessionIdleTime → NotSupported (X11 only)
+#   - logind IdleHint                                → KDE never sets it
+#   - /dev/input/event* mtimes                       → never updated by the
+#     kernel on input; they report SECONDS SINCE BOOT, which is precisely the
+#     failure this unit was written to retire (see bin/avalanche-activity.sh).
+#   - reading evdev directly                         → requires group `input`
+#
+# KWin has implemented ext-idle-notify-v1 since 5.27, and swayidle speaks it.
+# So swayidle becomes the sensor, and this unit reduces it to one fact on disk:
+#
+#   stamp ABSENT  → input within the last <grace> seconds
+#   stamp PRESENT → contents are the epoch second at which idleness crossed
+#                   <grace>, so last input was (contents - grace)
+#
+# The activity probe gates on `pgrep -x swayidle` before trusting either state,
+# so a dead sensor reports "unknown" instead of a stale reading in one
+# direction or the other.
+#
+# PATH COUPLING: the path below must match agentd's idle stamp, which is
+# derived from AGENTD_WAKE_MARKER_DIR (config.ts). the workstation overrides that to
+# /run/avalanche-wake in agentd.service, so this unit uses the same. Change one,
+# change both. The dir itself is provisioned root-owned by
+# /etc/tmpfiles.d/avalanche-wake.conf; the mkdir below is belt-and-braces for a
+# cold boot where this unit wins the race.
+#
+# NB `%` is a systemd specifier, so `date +%s` must be written `date +%%s`.
+
+[Unit]
+Description=agentd idle stamp (swayidle → ext-idle-notify-v1)
+Documentation=file:///home/jasper/hearthoperator/bin/avalanche-activity.sh
+Documentation=https://github.com/alliphant/hearth-private/blob/main/ops/agentd/avalanche-idle-stamp.service
+After=graphical-session.target
+PartOf=graphical-session.target
+# Without a Wayland compositor there is nothing to ask, and swayidle exits.
+ConditionEnvironment=WAYLAND_DISPLAY
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/swayidle -w \
+  timeout 10 'mkdir -p /run/avalanche-wake && date +%%s > /run/avalanche-wake/idle-since' \
+  resume 'rm -f /run/avalanche-wake/idle-since'
+# Clear the stamp on the way out so a stopped sensor never leaves behind a file
+# that would age into an ever-larger "idle" reading.
+ExecStopPost=/usr/bin/rm -f /run/avalanche-wake/idle-since
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

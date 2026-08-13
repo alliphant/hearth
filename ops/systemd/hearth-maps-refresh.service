@@ -1,0 +1,14 @@
+[Unit]
+Description=Hearth maps stack: monthly OSM refresh
+Wants=hearth-maps-refresh.timer
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/hearth/ops/maps
+ExecStart=/usr/bin/env bash %h/hearth/ops/maps/refresh.sh
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=2h
+
+[Install]
+WantedBy=default.target

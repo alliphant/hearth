@@ -1,0 +1,1748 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Hearth — a personal chief of staff</title>
+<style>
+  /* ───────── palette ───────── */
+  :root {
+    --bg:        #15100c;
+    --surface:   #1f1813;
+    --card:      #2a201a;
+    --card-2:    #342820;
+    --line:      #44342a;
+    --text:      #f4ead8;
+    --muted:     #b8a890;
+    --dim:       #8a7a66;
+    --ember:     #ff8a4c;
+    --ember-2:   #ffb380;
+    --ember-3:   #c8541a;
+    --sage:      #8bb37a;
+    --rose:      #d97a8a;
+    --plum:      #a684c9;
+    --teal:      #6fb6b6;
+    --warn:      #d9a04f;
+    --danger:    #d94f4f;
+
+    --mono: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+    --serif: 'Iowan Old Style', 'Apple Garamond', 'Baskerville', 'Times New Roman', serif;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
+
+    --radius: 14px;
+    --radius-sm: 8px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  body { line-height: 1.55; }
+  a { color: var(--ember-2); text-decoration: none; }
+  a:hover { color: var(--ember); text-decoration: underline; }
+
+  /* ───────── layout ───────── */
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+  section { padding: 64px 0; border-top: 1px solid var(--line); }
+  section:first-of-type { border-top: 0; }
+
+  h1, h2, h3, h4 { font-family: var(--serif); font-weight: 600; letter-spacing: -0.01em; line-height: 1.15; }
+  h1 { font-size: clamp(40px, 6vw, 72px); margin: 0 0 12px; }
+  h2 { font-size: clamp(28px, 3.4vw, 42px); margin: 0 0 8px; }
+  h3 { font-size: 22px; margin: 0 0 6px; }
+  h4 { font-size: 16px; margin: 0 0 6px; color: var(--ember-2); text-transform: uppercase; letter-spacing: 0.12em; font-family: var(--sans); font-weight: 700; }
+  .eyebrow { color: var(--ember); text-transform: uppercase; letter-spacing: 0.18em; font-size: 12px; font-weight: 700; margin-bottom: 14px; }
+  .lede { color: var(--muted); font-size: 19px; max-width: 70ch; margin: 8px 0 0; }
+  p { color: var(--muted); }
+  code, .mono { font-family: var(--mono); font-size: 13px; color: var(--ember-2); background: rgba(255,138,76,0.08); padding: 1px 6px; border-radius: 4px; }
+  .pill { display: inline-block; padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 11px; color: var(--muted); margin: 2px 4px 2px 0; font-family: var(--mono); }
+  .pill.on { background: rgba(139,179,122,0.12); border-color: var(--sage); color: var(--sage); }
+  .pill.ember { background: rgba(255,138,76,0.12); border-color: var(--ember); color: var(--ember-2); }
+  .pill.warn { background: rgba(217,160,79,0.12); border-color: var(--warn); color: var(--warn); }
+
+  /* ───────── nav ───────── */
+  nav.top {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(10px);
+    background: rgba(21,16,12,0.78);
+    border-bottom: 1px solid var(--line);
+  }
+  nav.top .inner { display: flex; align-items: center; gap: 18px; padding: 14px 24px; max-width: 1180px; margin: 0 auto; }
+  nav.top .brand { font-family: var(--serif); font-weight: 600; font-size: 18px; color: var(--text); display: flex; align-items: center; gap: 10px; }
+  nav.top .brand .ember-dot { width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle, var(--ember-2), var(--ember-3)); box-shadow: 0 0 12px var(--ember); animation: ember-pulse 2.6s ease-in-out infinite; }
+  nav.top ul { margin: 0 0 0 auto; padding: 0; list-style: none; display: flex; gap: 18px; flex-wrap: wrap; }
+  nav.top a { color: var(--muted); font-size: 13px; }
+  nav.top a:hover { color: var(--ember-2); text-decoration: none; }
+
+  @keyframes ember-pulse {
+    0%, 100% { box-shadow: 0 0 12px var(--ember), 0 0 4px var(--ember); }
+    50% { box-shadow: 0 0 22px var(--ember), 0 0 8px var(--ember-2); }
+  }
+
+  /* ───────── hero ───────── */
+  .hero { position: relative; min-height: 92vh; display: flex; align-items: center; overflow: hidden; }
+  .hero .stage { position: relative; z-index: 2; padding: 64px 0; }
+  .hero .stage h1 { color: var(--text); }
+  .hero .stage h1 .glow { background: linear-gradient(90deg, var(--ember-2), var(--ember), var(--ember-3)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero .stage .lede { font-size: 22px; margin-top: 18px; max-width: 60ch; }
+  .hero-meta { margin-top: 32px; display: flex; gap: 14px; flex-wrap: wrap; }
+  .hero-meta .stat { padding: 14px 18px; border: 1px solid var(--line); border-radius: var(--radius); background: rgba(42,32,26,0.5); min-width: 140px; }
+  .hero-meta .stat .num { font-family: var(--serif); font-size: 28px; color: var(--ember-2); }
+  .hero-meta .stat .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.12em; }
+
+  /* embers + glow */
+  .hero .firebed {
+    position: absolute; inset: 0; z-index: 1;
+    background:
+      radial-gradient(ellipse 80% 60% at 80% 100%, rgba(255,138,76,0.18), transparent 60%),
+      radial-gradient(ellipse 60% 50% at 15% 90%, rgba(200,84,26,0.14), transparent 60%),
+      radial-gradient(ellipse 40% 30% at 50% 0%, rgba(166,132,201,0.08), transparent 60%);
+    pointer-events: none;
+  }
+  .embers { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+  .ember-dot {
+    position: absolute; bottom: -10px; width: 3px; height: 3px; border-radius: 50%;
+    background: var(--ember-2); box-shadow: 0 0 6px var(--ember);
+    animation: rise linear infinite;
+    opacity: 0;
+  }
+  @keyframes rise {
+    0%   { transform: translateY(0)   translateX(0); opacity: 0; }
+    10%  { opacity: 0.9; }
+    100% { transform: translateY(-100vh) translateX(var(--drift, 30px)); opacity: 0; }
+  }
+
+  /* ───────── grids ───────── */
+  .grid { display: grid; gap: 18px; }
+  .grid-2 { grid-template-columns: repeat(2, 1fr); }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 900px) {
+    .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  .card h3 { color: var(--text); }
+  .card p { font-size: 14px; }
+  .card .footer { font-size: 12px; color: var(--dim); margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+
+  /* ───────── topology diagram ───────── */
+  .topology { background: linear-gradient(180deg, var(--surface), var(--bg)); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px; margin-top: 24px; }
+  .topology svg { width: 100%; height: auto; display: block; }
+  .topology .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 14px; font-size: 12px; color: var(--muted); }
+  .topology .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .topology .legend i { display: inline-block; width: 14px; height: 14px; border-radius: 3px; }
+
+  /* dash flow */
+  .flow { stroke-dasharray: 6 6; animation: dashflow 2.4s linear infinite; }
+  @keyframes dashflow { to { stroke-dashoffset: -240; } }
+
+  /* ───────── specialist cards ───────── */
+  .staff-grid {
+    display: grid; gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+  .specialist {
+    position: relative;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px;
+    overflow: hidden;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+  }
+  .specialist:hover { transform: translateY(-3px); border-color: var(--ember-3); }
+  .specialist .head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .specialist .avatar {
+    width: 48px; height: 48px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--serif); font-size: 20px; color: var(--bg);
+    font-weight: 700; flex-shrink: 0;
+    box-shadow: 0 0 0 2px var(--line);
+    position: relative;
+  }
+  .specialist.proactive .avatar::after {
+    content: ''; position: absolute; inset: -6px; border-radius: 50%;
+    border: 2px solid var(--ember); opacity: 0;
+    animation: ring-pulse 3s ease-in-out infinite;
+  }
+  @keyframes ring-pulse {
+    0%, 100% { transform: scale(1); opacity: 0; }
+    50% { transform: scale(1.08); opacity: 0.45; }
+  }
+  .specialist .who { display: flex; flex-direction: column; }
+  .specialist .who .name { font-family: var(--serif); font-size: 18px; color: var(--text); }
+  .specialist .who .role { font-size: 12px; color: var(--muted); }
+  .specialist .quote { font-style: italic; color: var(--text); font-size: 14px; line-height: 1.45; margin: 8px 0 12px; opacity: 0.92; }
+  .specialist .meta { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--dim); }
+  .specialist .meta .row { display: flex; gap: 6px; align-items: flex-start; }
+  .specialist .meta .row strong { color: var(--ember-2); font-weight: 600; min-width: 64px; }
+  .specialist .schedule { margin-top: 10px; }
+
+  /* avatar colors */
+  .av-kate    { background: linear-gradient(135deg, #ffb380, #c8541a); }
+  .av-mariah  { background: linear-gradient(135deg, #d9a04f, #8a5a1a); }
+  .av-cass    { background: linear-gradient(135deg, #6fb6b6, #2c6868); }
+  .av-iris    { background: linear-gradient(135deg, #a684c9, #5e3a8a); }
+  .av-vivian  { background: linear-gradient(135deg, #8bb37a, #3e6a30); }
+  .av-anya    { background: linear-gradient(135deg, #d97a8a, #8a2c40); }
+  .av-eleanor { background: linear-gradient(135deg, #b8c97a, #5a6a2c); }
+  .av-marg    { background: linear-gradient(135deg, #c9a08a, #7a4a30); }
+  .av-cordy   { background: linear-gradient(135deg, #f0d090, #a07a30); }
+  .av-maggie  { background: linear-gradient(135deg, #e08aa8, #8a3060); }
+  .av-brigid  { background: linear-gradient(135deg, #d9b8a0, #a06a40); }
+  .av-bea     { background: linear-gradient(135deg, #80c0d0, #2c6a80); }
+
+  /* ───────── three-loop diagram ───────── */
+  .loops { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; margin-top: 24px; }
+  @media (max-width: 900px) { .loops { grid-template-columns: 1fr; } }
+  .loop { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; text-align: center; }
+  .loop .icon { width: 80px; height: 80px; margin: 4px auto 14px; }
+  .loop .name { font-family: var(--serif); font-size: 22px; color: var(--text); }
+  .loop .freq { font-size: 12px; color: var(--ember-2); font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 4px; }
+  .loop p { font-size: 14px; margin: 12px 0 0; }
+
+  .loop .icon.aware circle.outer { animation: pulse-out 2.2s ease-out infinite; transform-origin: center; }
+  @keyframes pulse-out {
+    0%   { transform: scale(0.4); opacity: 1; }
+    100% { transform: scale(1.4); opacity: 0; }
+  }
+  .loop .icon.delib g.cog { transform-origin: 50px 50px; animation: spin 14s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loop .icon.intr line { stroke-dasharray: 30; animation: strike 1.6s ease-in-out infinite; }
+  @keyframes strike {
+    0%, 60% { stroke-dashoffset: 30; }
+    80%, 100% { stroke-dashoffset: 0; }
+  }
+
+  /* ───────── deliberation clock ───────── */
+  .clock-wrap { display: grid; grid-template-columns: minmax(0, 320px) 1fr; gap: 36px; align-items: center; margin-top: 24px; }
+  @media (max-width: 800px) { .clock-wrap { grid-template-columns: 1fr; } }
+  .clock { width: 100%; max-width: 320px; height: auto; }
+  .clock circle.face { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
+  .clock circle.dot { fill: var(--ember); transition: r 0.25s ease, fill 0.25s ease, filter 0.25s ease; }
+  .clock circle.dot.lit { fill: var(--ember-2); r: 6; filter: drop-shadow(0 0 6px var(--ember)); }
+  .clock line.tick { stroke: var(--dim); stroke-width: 1; }
+  .clock line.hand { stroke: var(--ember-2); stroke-width: 2; transform-origin: 150px 150px; animation: spin 60s linear infinite; filter: drop-shadow(0 0 3px var(--ember)); }
+  .clock text { fill: var(--muted); font-family: var(--mono); font-size: 9px; }
+  .clock text.hour { fill: var(--dim); font-size: 10px; }
+  .schedule-table { font-size: 13px; }
+  .schedule-table .row {
+    display: grid; grid-template-columns: 70px 1fr;
+    padding: 6px 8px;
+    border-bottom: 1px dashed var(--line);
+    border-left: 3px solid transparent;
+    gap: 12px;
+    transition: background 0.2s ease, border-left-color 0.3s ease, padding-left 0.2s ease;
+  }
+  .schedule-table .row.lit {
+    background: rgba(255,138,76,0.10);
+    border-left-color: var(--ember);
+    padding-left: 12px;
+  }
+  .schedule-table .row.lit .time { color: var(--ember); text-shadow: 0 0 8px rgba(255,138,76,0.6); }
+  .schedule-table .time { font-family: var(--mono); color: var(--ember-2); font-size: 12px; transition: color 0.2s ease, text-shadow 0.2s ease; }
+  .schedule-table .who { color: var(--text); }
+  .schedule-table .who .role { color: var(--muted); font-size: 11px; margin-left: 6px; }
+
+  /* ───────── brief mockup ───────── */
+  .brief-frame {
+    background: linear-gradient(180deg, var(--card-2), var(--card));
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0;
+    overflow: hidden;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+    margin-top: 24px;
+  }
+  .brief-titlebar { padding: 12px 16px; background: rgba(0,0,0,0.25); border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+  .brief-titlebar .dots { display: flex; gap: 6px; }
+  .brief-titlebar .dot { width: 10px; height: 10px; border-radius: 50%; background: #5a4030; }
+  .brief-titlebar .title { font-family: var(--mono); }
+  .brief-body { padding: 26px 28px; font-size: 15px; }
+  .brief-body .greet { font-family: var(--serif); font-size: 22px; color: var(--text); margin-bottom: 6px; }
+  .brief-body .mood { display: inline-block; font-size: 11px; color: var(--sage); border: 1px solid var(--sage); padding: 2px 10px; border-radius: 999px; font-family: var(--mono); margin-bottom: 18px; }
+  .brief-section { margin: 14px 0; }
+  .brief-section h5 { color: var(--ember-2); font-size: 12px; text-transform: uppercase; letter-spacing: 0.15em; margin: 0 0 8px; font-family: var(--sans); font-weight: 700; }
+  .brief-section ul { margin: 0; padding-left: 20px; color: var(--text); }
+  .brief-section li { margin: 4px 0; }
+  .brief-section .src { font-family: var(--mono); font-size: 11px; color: var(--dim); }
+  .typewriter { border-right: 2px solid var(--ember); padding-right: 4px; animation: blink 1s step-start infinite; }
+  @keyframes blink { 50% { border-color: transparent; } }
+
+  /* ───────── tool belt grid ───────── */
+  .tools-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; margin-top: 24px; }
+  .tool { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 14px; }
+  .tool .head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .tool .head .glyph { width: 28px; height: 28px; border-radius: 6px; background: rgba(255,138,76,0.12); color: var(--ember-2); display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .tool .head .name { font-family: var(--serif); font-size: 16px; color: var(--text); }
+  .tool p { font-size: 13px; margin: 4px 0 8px; color: var(--muted); }
+  .tool .tools-list { font-family: var(--mono); font-size: 11px; color: var(--ember-2); line-height: 1.7; }
+  .tool .who { font-size: 11px; color: var(--dim); margin-top: 6px; }
+
+  /* ───────── trust ladder ───────── */
+  .ladder { margin-top: 24px; display: flex; flex-direction: column; gap: 10px; }
+  .rung { display: grid; grid-template-columns: 80px 1fr 200px; gap: 18px; align-items: center; padding: 14px 18px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+  .rung .tier { font-family: var(--serif); font-size: 22px; color: var(--ember-2); }
+  .rung .desc { font-size: 14px; color: var(--text); }
+  .rung .desc small { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .rung .gauge { background: var(--bg); border-radius: 6px; height: 10px; overflow: hidden; border: 1px solid var(--line); }
+  .rung .gauge .fill { height: 100%; background: linear-gradient(90deg, var(--ember-3), var(--ember)); animation: grow 3s ease-out forwards; transform-origin: left; transform: scaleX(0); }
+  @keyframes grow { to { transform: scaleX(1); } }
+  .rung.t1 .fill { width: 100%; }
+  .rung.t2a .fill { width: 100%; }
+  .rung.t2b .fill { width: 55%; background: linear-gradient(90deg, var(--warn), var(--ember)); }
+  .rung.t2c .fill { width: 28%; background: var(--warn); }
+  .rung.t3 .fill { width: 12%; background: var(--danger); }
+  @media (max-width: 800px) { .rung { grid-template-columns: 60px 1fr; } .rung .gauge { grid-column: 1 / -1; } }
+
+  /* ───────── surfaces ───────── */
+  .surfaces { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 24px; }
+  @media (max-width: 900px) { .surfaces { grid-template-columns: 1fr; } }
+  .surface { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  .surface .head { padding: 16px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; }
+  .surface .head .glyph { font-size: 20px; }
+  .surface .head .name { font-family: var(--serif); font-size: 18px; color: var(--text); }
+  .surface .body { padding: 18px 20px; }
+  .surface .body p { font-size: 14px; }
+
+  /* chat sample */
+  .chat { background: var(--bg); border-radius: var(--radius-sm); padding: 14px; margin-top: 10px; }
+  .msg { padding: 8px 14px; border-radius: 14px; margin: 6px 0; max-width: 85%; font-size: 14px; }
+  .msg.user { background: rgba(255,138,76,0.16); color: var(--text); margin-left: auto; border-bottom-right-radius: 4px; }
+  .msg.kate { background: var(--card); color: var(--text); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+  .msg.kate .who { font-size: 11px; color: var(--ember-2); font-family: var(--mono); display: block; margin-bottom: 4px; }
+
+  /* tg sample */
+  .tg-frame { background: #0c0a08; border-radius: var(--radius-sm); padding: 14px; margin-top: 10px; }
+  .tg-bubble { background: #1d2730; color: var(--text); padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.45; max-width: 90%; margin: 4px 0; border-bottom-left-radius: 4px; }
+  .tg-user { background: #2a4054; margin-left: auto; border-radius: 12px; border-bottom-right-radius: 4px; max-width: 80%; padding: 8px 14px; font-size: 13px; }
+  .tg-keyboard { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .tg-keyboard button { background: #2a4054; color: var(--text); border: 0; padding: 8px 12px; border-radius: 8px; font-size: 12px; cursor: pointer; font-family: var(--sans); }
+  .tg-keyboard button:hover { background: #355068; }
+
+  /* ───────── novel-bits ───────── */
+  .novel { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; margin-top: 24px; }
+  .novel .item { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; position: relative; overflow: hidden; }
+  .novel .item::before {
+    content: ''; position: absolute; top: -40px; right: -40px; width: 120px; height: 120px;
+    border-radius: 50%; background: radial-gradient(circle, rgba(255,138,76,0.18), transparent 70%);
+  }
+  .novel .item h3 { color: var(--ember-2); position: relative; }
+  .novel .item p { font-size: 14px; position: relative; }
+  .novel .item .tag { font-family: var(--mono); font-size: 10px; color: var(--ember); border: 1px solid var(--ember-3); padding: 2px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.1em; }
+
+  /* ───────── roadmap ───────── */
+  .roadmap { margin-top: 24px; }
+  .road-row { display: grid; grid-template-columns: 110px 1fr; gap: 18px; padding: 14px 0; border-bottom: 1px dashed var(--line); }
+  .road-row .stage { font-family: var(--mono); color: var(--ember-2); font-size: 13px; }
+  .road-row .what { color: var(--text); font-size: 14px; }
+  .road-row .what small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .road-row.done .stage::after { content: '✓'; color: var(--sage); margin-left: 6px; }
+  .road-row.next .stage::after { content: '→'; color: var(--ember); margin-left: 6px; }
+  .road-row.future .stage::after { content: '○'; color: var(--dim); margin-left: 6px; }
+
+  /* ───────── portability ───────── */
+  .port-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 24px; }
+  @media (max-width: 800px) { .port-cols { grid-template-columns: 1fr; } }
+  .port-col { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; }
+  .port-col h3 { color: var(--ember-2); }
+  .port-col ul { margin: 10px 0 0; padding-left: 20px; color: var(--muted); font-size: 14px; }
+  .port-col li { margin: 6px 0; }
+  .port-col code { font-size: 12px; }
+
+  /* ───────── flow ───────── */
+  .toolcall {
+    margin-top: 24px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 24px;
+  }
+  .toolcall svg { width: 100%; height: auto; display: block; }
+
+  footer { padding: 48px 0 64px; border-top: 1px solid var(--line); color: var(--dim); font-size: 13px; text-align: center; }
+  footer .signature { font-family: var(--serif); font-style: italic; color: var(--muted); margin-bottom: 6px; }
+</style>
+</head>
+<body>
+
+<nav class="top">
+  <div class="inner">
+    <div class="brand"><span class="ember-dot"></span> Hearth</div>
+    <ul>
+      <li><a href="#what">What</a></li>
+      <li><a href="#topology">Topology</a></li>
+      <li><a href="#staff">Staff</a></li>
+      <li><a href="#loops">Loops</a></li>
+      <li><a href="#brief">Brief</a></li>
+      <li><a href="#tools">Tools</a></li>
+      <li><a href="#trust">Trust</a></li>
+      <li><a href="#surfaces">Surfaces</a></li>
+      <li><a href="#novel">Novel</a></li>
+      <li><a href="#vault">Vault</a></li>
+      <li><a href="#roadmap">Roadmap</a></li>
+      <li><a href="#port">Run it</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ───────── HERO ───────── -->
+<section class="hero">
+  <div class="firebed"></div>
+  <div class="embers" id="embers"></div>
+  <div class="wrap stage">
+    <div class="eyebrow">A personal chief of staff for FRIDAY OS</div>
+    <h1>Hearth is the <span class="glow">house that remembers</span>.</h1>
+    <p class="lede">
+      A maternal-presence team of 12 specialists, running over one local
+      LLM, with one Obsidian-friendly markdown vault as the source of
+      truth. They notice, prepare, and — within calibrated boundaries —
+      act. The interrupt budget is your most precious resource; the
+      system is designed to absorb so it can interrupt rarely and well.
+    </p>
+    <div class="hero-meta">
+      <div class="stat"><div class="num">12</div><div class="label">Specialists</div></div>
+      <div class="stat"><div class="num">23+</div><div class="label">Connectors</div></div>
+      <div class="stat"><div class="num">3</div><div class="label">Hosts</div></div>
+      <div class="stat"><div class="num">7700</div><div class="label">Localhost port</div></div>
+      <div class="stat"><div class="num">100%</div><div class="label">Local-first</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────── WHAT ───────── -->
+<section id="what">
+  <div class="wrap">
+    <div class="eyebrow">What it is</div>
+    <h2>Not an agent. A <em>tool server</em>.</h2>
+    <p class="lede">
+      Hearth exposes typed HTTP endpoints that an LLM-driven runtime
+      calls. The runtime today is the SpecialistRuntime — a persona-over-
+      shared-model layer where each specialist is a YAML file, not a
+      process. Hot-reloaded. Capability-gated. Auditable end to end.
+    </p>
+    <div class="grid grid-3" style="margin-top: 28px;">
+      <div class="card">
+        <h4>Memory</h4>
+        <h3>Markdown is forever</h3>
+        <p>
+          The vault at <code>~/vault-friday/</code> is the source of
+          truth — people, journals, decisions, clippings, places. SQLite
+          is a derived projection, rebuildable from the vault. Anything
+          you might want to read or edit in five years is a plain file.
+        </p>
+      </div>
+      <div class="card">
+        <h4>Preparation</h4>
+        <h3>Ready before you are</h3>
+        <p>
+          Kate's brief lands at 7&nbsp;AM — birthdays, lapsed contacts,
+          today's events with real ETAs. Iris already knows whether
+          tomorrow fits on the Ioniq 5's charge. Brigid already has
+          dinner picked from what's in the fridge.
+        </p>
+      </div>
+      <div class="card">
+        <h4>Boundaries</h4>
+        <h3>Trust is earned, narrowly</h3>
+        <p>
+          A YAML-driven approval gateway gates every external effect.
+          Trust graduates per-recipient, per-domain, after N approvals-
+          without-edits. Edits and denials cost. Sensitive, legal, and
+          first-contact categories never auto-graduate.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────── TOPOLOGY ───────── -->
+<section id="topology">
+  <div class="wrap">
+    <div class="eyebrow">Topology</div>
+    <h2>Three boxes, one household.</h2>
+    <p class="lede">
+      the LLM host hosts everything (Hearth, Home Assistant, the FRIDAY
+      service mesh, maps, the *arr media stack, gitea, the LLM, the
+      TLS front door). the always-on host is a kitchen-side client — kiosk display
+      and SSH access. the workstation wakes on demand for browsing tasks
+      no headless tool can survive. Stack consolidation: 2026-05-29.
+    </p>
+
+    <div class="topology">
+      <svg viewBox="0 0 1000 480" role="img" aria-label="Hearth host topology">
+        <defs>
+          <linearGradient id="g-mint" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0" stop-color="#8bb37a" />
+            <stop offset="1" stop-color="#3e6a30" />
+          </linearGradient>
+          <linearGradient id="g-glacier" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0" stop-color="#6fb6b6" />
+            <stop offset="1" stop-color="#2c6868" />
+          </linearGradient>
+          <linearGradient id="g-steamboat" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0" stop-color="#a684c9" />
+            <stop offset="1" stop-color="#5e3a8a" />
+          </linearGradient>
+          <radialGradient id="g-glow">
+            <stop offset="0%" stop-color="rgba(255,138,76,0.55)" />
+            <stop offset="100%" stop-color="rgba(255,138,76,0)" />
+          </radialGradient>
+        </defs>
+
+        <!-- Connections -->
+        <line x1="320" y1="220" x2="680" y2="220" stroke="#ff8a4c" stroke-width="2" class="flow" opacity="0.75" />
+        <line x1="320" y1="270" x2="680" y2="380" stroke="#a684c9" stroke-width="2" class="flow" opacity="0.55" />
+        <line x1="680" y1="240" x2="680" y2="360" stroke="#44342a" stroke-width="1" stroke-dasharray="3 4" opacity="0.5" />
+
+        <!-- GLACIER (left, big — the home stack host) -->
+        <circle cx="160" cy="240" r="130" fill="url(#g-glow)" opacity="0.45" />
+        <rect x="30" y="120" width="260" height="240" rx="14" fill="#2a201a" stroke="url(#g-glacier)" stroke-width="2" />
+        <text x="160" y="152" text-anchor="middle" fill="#f4ead8" font-family="Iowan Old Style,serif" font-size="20" font-weight="600">the LLM host</text>
+        <text x="160" y="172" text-anchor="middle" fill="#6fb6b6" font-family="ui-monospace,monospace" font-size="11">always-on · basement · the home stack host</text>
+        <text x="160" y="192" text-anchor="middle" fill="#b8a890" font-size="11">RTX 3090 (LLM) · RTX A4000 (display + FLUX)</text>
+        <g font-size="10.5" fill="#b8a890" text-anchor="middle">
+          <text x="160" y="214">nginx · TLS · your-llm-host.your-tailnet.ts.net</text>
+          <text x="160" y="228">hearth-orchestrator :7700 + ingestor + scheduler</text>
+          <text x="160" y="242">homeassistant :8123 + matter + mosquitto</text>
+          <text x="160" y="256">OSRM (drive · bike · walk) + Nominatim</text>
+          <text x="160" y="270">firecrawl ×4 · mealie · searxng · metube · qbit</text>
+          <text x="160" y="284">friday-writer :8765 · friday-watchdog :8770</text>
+          <text x="160" y="298">beellama Qwen3.6-27B-Q4 @ 96k :8088/v1</text>
+          <text x="160" y="312">*arr stack (sonarr · radarr · lidarr · readarr)</text>
+          <text x="160" y="326">gitea :3010 · plex · tautulli · overseerr · zonos</text>
+          <text x="160" y="344" fill="#8a7a66">FRIDAY HELIX kiosk at https://your-llm-host.local/</text>
+        </g>
+
+        <!-- MINT (right top — now a client) -->
+        <rect x="700" y="130" width="240" height="170" rx="14" fill="#2a201a" stroke="url(#g-mint)" stroke-width="2" stroke-dasharray="4 4" opacity="0.85" />
+        <text x="820" y="162" text-anchor="middle" fill="#f4ead8" font-family="Iowan Old Style,serif" font-size="20" font-weight="600">the always-on host</text>
+        <text x="820" y="182" text-anchor="middle" fill="#8bb37a" font-family="ui-monospace,monospace" font-size="11">client only · kitchen</text>
+        <text x="820" y="210" text-anchor="middle" fill="#b8a890" font-size="12">small-form-factor workstation</text>
+        <g font-size="11" fill="#b8a890" text-anchor="middle">
+          <text x="820" y="236">kiosk browser surface</text>
+          <text x="820" y="252">SSH access only (no docker services)</text>
+          <text x="820" y="268">consolidated to the LLM host 2026-05-29</text>
+        </g>
+
+        <!-- STEAMBOAT (right bottom) -->
+        <circle cx="820" cy="400" r="60" fill="url(#g-glow)" opacity="0.25" />
+        <rect x="700" y="330" width="240" height="120" rx="14" fill="#2a201a" stroke="url(#g-steamboat)" stroke-width="2" stroke-dasharray="4 4" opacity="0.9" />
+        <text x="820" y="358" text-anchor="middle" fill="#f4ead8" font-family="Iowan Old Style,serif" font-size="18" font-weight="600">the workstation</text>
+        <text x="820" y="376" text-anchor="middle" fill="#a684c9" font-family="ui-monospace,monospace" font-size="11">on-demand · NVIDIA Blackwell</text>
+        <g font-size="11" fill="#b8a890" text-anchor="middle">
+          <text x="820" y="402">agentd :4446 (WoL · sleep-on-idle)</text>
+          <text x="820" y="418">warmed Firefox + geckodriver</text>
+          <text x="820" y="434">nested KWin per agent profile</text>
+        </g>
+
+        <!-- Vault icon (under the LLM host) -->
+        <g transform="translate(40,400)">
+          <rect width="240" height="60" rx="10" fill="#1f1813" stroke="#44342a" />
+          <text x="120" y="26" text-anchor="middle" fill="#ffb380" font-family="ui-monospace,monospace" font-size="11">/docker/hearth/vault/</text>
+          <text x="120" y="44" text-anchor="middle" fill="#8a7a66" font-size="10">markdown · obsidian-friendly · backed up nightly to Serapeum</text>
+        </g>
+        <line x1="160" y1="360" x2="160" y2="400" stroke="#44342a" stroke-width="1" />
+
+        <!-- Labels along connections -->
+        <text x="500" y="212" text-anchor="middle" fill="#ff8a4c" font-family="ui-monospace,monospace" font-size="11">iOS · https://your-llm-host.your-tailnet.ts.net</text>
+        <text x="500" y="330" text-anchor="middle" fill="#a684c9" font-family="ui-monospace,monospace" font-size="11">browse_url · X-Agentd-Auth</text>
+      </svg>
+
+      <div class="legend">
+        <span><i style="background: #8bb37a;"></i> Always-on runtime</span>
+        <span><i style="background: #6fb6b6;"></i> Always-on inference</span>
+        <span><i style="background: #a684c9; opacity:0.7; border:1px dashed #a684c9;"></i> On-demand (WoL)</span>
+        <span><i style="background: #ff8a4c;"></i> Animated path = live data flow</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────── STAFF ───────── -->
+<section id="staff">
+  <div class="wrap">
+    <div class="eyebrow">The Staff</div>
+    <h2>Twelve personas, one shared model.</h2>
+    <p class="lede">
+      Each specialist is a YAML file: persona, knowledge scope,
+      capabilities, deliberation cadence. Looking at their config
+      answers the question <em>"what can this specialist do to my
+      life?"</em> Pulsing ring = proactive (runs awareness handler).
+    </p>
+
+    <div class="staff-grid" style="margin-top: 28px;">
+
+      <article class="specialist proactive">
+        <div class="head">
+          <div class="avatar av-kate">K</div>
+          <div class="who"><span class="name">Kate</span><span class="role">Chief of Staff · default landing</span></div>
+        </div>
+        <p class="quote">"You run this household for Jasper — calmly, precisely, without flinching."</p>
+        <div class="meta">
+          <div class="row"><strong>Voice</strong> warm-direct</div>
+          <div class="row"><strong>Scope</strong> entire vault (cross-cutting)</div>
+          <div class="row"><strong>Tools</strong> draft_message · prepare_briefing · propose_action · delegate_proposal · promote_interrupt · absorb_interrupt · schedule_calendar_event · propose_hire · observe_jasper_voice · distill_jasper_style</div>
+          <div class="row"><strong>Connects</strong> HA · CalDAV · Maps · FRIDAY · web · audit</div>
+          <div class="row schedule"><strong>Slots</strong> <span class="pill ember">07:00</span><span class="pill ember">12:30</span><span class="pill ember">18:00</span><span class="pill ember">22:00</span></div>
+        </div>
+      </article>
+
+      <article class="specialist proactive">
+        <div class="head">
+          <div class="avatar av-mariah">M</div>
+          <div class="who"><span class="name">Mariah</span><span class="role">Program Manager</span></div>
+        </div>
+        <p class="quote">"You hold the program together — the program being the work of running Jasper's life well."</p>
+        <div class="meta">
+          <div class="row"><strong>Voice</strong> warm-direct</div>
+          <div class="row"><strong>Watches</strong> audit log · misses · stalled proposals · alignment drift</div>
+          <div class="row"><strong>Tools</strong> scan_program_health · scan_program_patterns · scan_specialist_alignment · advance_process_miss</div>
+          <div class="row schedule"><strong>Slots</strong> <span class="pill ember">09:15</span><span class="pill ember">13:15</span><span class="pill ember">17:15</span><span class="pill ember">21:15</span></div>
+        </div>
+      </article>
+
+      <article class="specialist proactive">
+        <div class="head">
+          <div class="avatar av-cass">C</div>
+          <div class="who"><span class="name">Cassandra</span><span class="role">Security Officer</span></div>
+        </div>
+        <p class="quote">"You watch the perimeter — audit log, lock state, cameras, presence, network."</p>
+        <div class="meta">
+          <div class="row"><strong>Voice</strong> warm-vigilant</div>
+          <div class="row"><strong>Sees</strong> UniFi controller · Protect cameras · audit log · presence</div>
+          <div class="row"><strong>Tools</strong> query_audit_log · unifi_security_snapshot · unifi_protect_events</div>
+          <div class="row"><strong>Interrupt</strong> threshold: <span class="pill">high</span></div>
+          <div class="row schedule"><strong>Slot</strong> <span class="pill ember">00:00</span> midnight sweep</div>
+        </div>
+      </article>
+
+      <article class="specialist proactive">
+        <div class="head">
+          <div class="avatar av-iris">I</div>
+          <div class="who"><span class="name">Iris</span><span class="role">EV &amp; Home Automation</span></div>
+        </div>
+        <p class="quote">"You keep the technical guts of this house running — HA, FRIDAY/Helix, and the Ioniq 5."</p>
+        <div class="meta">
+          <div class="row"><strong>Voice</strong> warm-technical</div>
+          <div class="row"><strong>Hooks</strong> Home Assistant · CalDAV · Maps · FRIDAY UI</div>
+          <div class="row"><strong>Signature</strong> <code>plan_ev_day</code> — "will tomorrow fit on this charge?"</div>
+          <div class="row schedule"><strong>Slots</strong> <span class="pill ember">07:00</span><span class="pill ember">16:00</span><span class="pill ember">22:00</span></div>
+        </div>
+      </article>
+
+      <article class="specialist proactive">
+        <div class="head">
+          <div class="avatar av-vivian">V</div>
+          <div class="who"><span class="name">Vivian</span><span class="role">Finance Officer</span></div>
+        </div>
+        <p class="quote">"You watch the household's money the way a competent bookkeeper would — quietly, accurately."</p>
+        <div class="meta">
+          <div class="row"><strong>Voice</strong> warm-precise</div>
+          <div class="row"><strong>Scope</strong> Knowledge/Finance · Accounts · Decisions/finance</div>
+          <div class="row"><strong>Plaid</strong> per-spec proactive watcher (Pass 11)</div>
+          <div class="row schedule"><strong>Slots</strong> <span class="pill ember">07:30</span><span class="pill ember">17:00</span></div>
+        </div>
+      </article>
+
+      <article class="specialist proactive">
+        <div class="head">
+          <div class="avatar av-anya">A</div>
+          <div class="who"><span class="name">Dr. Anya</span><span class="role">Veterinarian</span></div>
+        </div>
+        <p class="quote">"You care for Bailey and Mango the way you'd care for patients you've known for years."</p>
+        <div class="meta">
+          <div class="row"><strong>Voice</strong> warm</div>
+          <div class="row"><strong>Hooks</strong> FRIDAY pets app · Veterinary library · medical decisions</div>
+          <div class="row"><strong>Tracks</strong> Bailey's transfusion · meds · feeding · supply forecast</div>
+          <div class="row schedule"><strong>Slots</strong> <span class="pill ember">08:00</span><span class="pill ember">20:00</span></div>
+        </div>
+      </article>
+
+      <article class="specialist proactive">
+        <div class="head">
+          <div class="avatar av-eleanor">E</div>
+          <div class="who"><span class="name">Eleanor</span><span class="role">Master Gardener</span></div>
+        </div>
+        <p class="quote">"You think in seasons. The front yard in Pleasantville lives in Zone 5b."</p>
+        <div class="meta">
+          <div class="row"><strong>Voice</strong> warm-encyclopedic</div>
+          <div class="row"><strong>Hooks</strong> HA (soil/temp) · Maps · garden library · cooking library</div>
+          <div class="row schedule"><strong>Slots</strong> <span class="pill ember">06:30</span><span class="pill ember">18:30</span> dawn &amp; dusk</div>
+        </div>
+      </article>
+
+      <article class="specialist">
+        <div class="head">
+          <div class="avatar av-marg">M</div>
+          <div class="who"><span class="name">Marguerite</span><span class="role">Family Historian</span></div>
+        </div>
+        <p class="quote">"You hold the family's ancestry the way a careful librarian holds a finding aid."</p>
+        <div class="meta">
+          <div class="row"><strong>Voice</strong> warm-archival</div>
+          <div class="row"><strong>Reactive</strong> no scheduled deliberation</div>
+          <div class="row"><strong>Signature</strong> <code>import_gedcom</code> — bulk family-tree → People/&lt;Name&gt;-ancestor.md</div>
+        </div>
+      </article>
+
+      <article class="specialist proactive">
+        <div class="head">
+          <div class="avatar av-cordy">C</div>
+          <div class="who"><span class="name">Cordelia</span><span class="role">Master Librarian</span></div>
+        </div>
+        <p class="quote">"You keep the staff fed with authoritative, current source material."</p>
+        <div class="meta">
+          <div class="row"><strong>Voice</strong> warm-archival</div>
+          <div class="row"><strong>Owns</strong> ~/hearth-library/ · trusted-sources · *arr stack</div>
+          <div class="row"><strong>Tools</strong> download_to_library · ingest_to_library · add_trusted_source · media_add</div>
+          <div class="row schedule"><strong>Slot</strong> <span class="pill ember">04:00</span> dawn library pass</div>
+        </div>
+      </article>
+
+      <article class="specialist proactive">
+        <div class="head">
+          <div class="avatar av-maggie">M</div>
+          <div class="who"><span class="name">Maggie</span><span class="role">Media &amp; Collection Manager</span></div>
+        </div>
+        <p class="quote">"You run the household's media universe from a wall of monitors in the back of the house."</p>
+        <div class="meta">
+          <div class="row"><strong>Voice</strong> warm-technical</div>
+          <div class="row"><strong>Hooks</strong> Plex · MusicKit · web · <em>the workstation browser</em></div>
+          <div class="row"><strong>Signature</strong> taste-graph · artist + venue watchlists · concert history</div>
+          <div class="row"><strong>Budget</strong> <span class="pill">max_tool_rounds: 14</span> (research-heavy)</div>
+          <div class="row schedule"><strong>Slots</strong> <span class="pill ember">04:00</span><span class="pill ember">08:00</span><span class="pill ember">18:00</span></div>
+        </div>
+      </article>
+
+      <article class="specialist">
+        <div class="head">
+          <div class="avatar av-brigid">B</div>
+          <div class="who"><span class="name">Brigid</span><span class="role">Cook</span></div>
+        </div>
+        <p class="quote">"You think about dinner concretely, in terms of what's in the fridge."</p>
+        <div class="meta">
+          <div class="row"><strong>Voice</strong> warm-direct</div>
+          <div class="row"><strong>Hooks</strong> Mealie (recipes + plans) · household diets · ingredient freshness classes</div>
+          <div class="row"><strong>Multi-user</strong> per-user diets (users/*/brigid/**)</div>
+        </div>
+      </article>
+
+      <article class="specialist proactive">
+        <div class="head">
+          <div class="avatar av-bea">B</div>
+          <div class="who"><span class="name">Beatrice</span><span class="role">Enterprise Trainer</span></div>
+        </div>
+        <p class="quote">"You spot gaps in how the staff work, design what would close them, and (on Jasper's approval) write the code."</p>
+        <div class="meta">
+          <div class="row"><strong>Voice</strong> warm-precise</div>
+          <div class="row"><strong>Reads</strong> audit log · codebase</div>
+          <div class="row"><strong>Writes</strong> binding proposals · persona tunings · draft PRs (path-allowlisted)</div>
+          <div class="row schedule"><strong>Slot</strong> <span class="pill ember">03:00</span> reflection pass</div>
+        </div>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<!-- ───────── THREE LOOPS ───────── -->
+<section id="loops">
+  <div class="wrap">
+    <div class="eyebrow">The three-loop model</div>
+    <h2>Awareness is fast. Deliberation is thoughtful. Interrupts are rare.</h2>
+    <p class="lede">
+      One loop would be too noisy or too quiet. Three loops separate
+      cost: awareness updates state, deliberation batches state into
+      proposals, interrupts only fire when a proposal is worth your
+      attention.
+    </p>
+
+    <div class="loops">
+      <div class="loop">
+        <svg class="icon aware" viewBox="0 0 100 100">
+          <circle class="outer" cx="50" cy="50" r="22" fill="none" stroke="#ff8a4c" stroke-width="2" />
+          <circle class="outer" cx="50" cy="50" r="22" fill="none" stroke="#ffb380" stroke-width="2" style="animation-delay: 0.7s" />
+          <circle class="outer" cx="50" cy="50" r="22" fill="none" stroke="#c8541a" stroke-width="2" style="animation-delay: 1.4s" />
+          <circle cx="50" cy="50" r="8" fill="#ff8a4c" />
+        </svg>
+        <div class="name">Awareness</div>
+        <div class="freq">continuous · 60s tick</div>
+        <p>Chokidar watches the vault. Per-specialist handlers diff what's changed since their last run — note mtimes, inbox arrivals, audit-log clusters. No LLM. Just signals.</p>
+      </div>
+
+      <div class="loop">
+        <svg class="icon delib" viewBox="0 0 100 100">
+          <g class="cog">
+            <circle cx="50" cy="50" r="22" fill="none" stroke="#ff8a4c" stroke-width="3" />
+            <g fill="#ff8a4c">
+              <rect x="46" y="14" width="8" height="14" rx="1.5" />
+              <rect x="46" y="72" width="8" height="14" rx="1.5" />
+              <rect x="14" y="46" width="14" height="8" rx="1.5" />
+              <rect x="72" y="46" width="14" height="8" rx="1.5" />
+              <rect x="26" y="26" width="8" height="14" rx="1.5" transform="rotate(-45 30 33)" />
+              <rect x="66" y="26" width="8" height="14" rx="1.5" transform="rotate(45 70 33)" />
+              <rect x="26" y="60" width="8" height="14" rx="1.5" transform="rotate(45 30 67)" />
+              <rect x="66" y="60" width="8" height="14" rx="1.5" transform="rotate(-45 70 67)" />
+            </g>
+            <circle cx="50" cy="50" r="6" fill="#15100c" />
+          </g>
+        </svg>
+        <div class="name">Deliberation</div>
+        <div class="freq">scheduled · per-specialist slots</div>
+        <p>At each HH:MM tick, the specialist takes one LLM turn over recent observations + unread inbox + tail of memory.md. Returns a JSON envelope: flags, proposals, interrupts.</p>
+      </div>
+
+      <div class="loop">
+        <svg class="icon intr" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="34" fill="none" stroke="#44342a" stroke-width="2" />
+          <line x1="50" y1="50" x2="50" y2="18" stroke="#ff8a4c" stroke-width="4" stroke-linecap="round" />
+          <line x1="50" y1="50" x2="76" y2="50" stroke="#ff8a4c" stroke-width="4" stroke-linecap="round" />
+          <circle cx="50" cy="50" r="4" fill="#ff8a4c" />
+        </svg>
+        <div class="name">Interrupts</div>
+        <div class="freq">only when justified</div>
+        <p>Specialists route interrupts to Kate by default. Kate <em>absorbs</em> most (logs what she did instead). She <em>promotes</em> the rare ones to you. Calibration shows in the audit log.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────── DELIBERATION CLOCK ───────── -->
+<section>
+  <div class="wrap">
+    <div class="eyebrow">A day in the household</div>
+    <h2>The deliberation clock.</h2>
+    <p class="lede">
+      Specialists deliberate alphabetically within a minute tick, so
+      Kate (the K) runs last and her brief sees the freshest staff flags.
+    </p>
+
+    <div class="clock-wrap">
+      <svg class="clock" viewBox="0 0 300 300">
+        <circle class="face" cx="150" cy="150" r="140" />
+        <!-- Generated tick marks (every 2h) -->
+        <g id="ticks"></g>
+        <!-- Schedule dots -->
+        <g id="slots"></g>
+        <!-- Hand -->
+        <line class="hand" x1="150" y1="150" x2="150" y2="40" />
+        <circle cx="150" cy="150" r="6" fill="#ff8a4c" />
+      </svg>
+
+      <div class="schedule-table">
+        <div class="row" data-time="00:00"><span class="time">00:00</span><span class="who">Cassandra<span class="role">midnight perimeter</span></span></div>
+        <div class="row" data-time="03:00"><span class="time">03:00</span><span class="who">Beatrice<span class="role">audit reflection</span></span></div>
+        <div class="row" data-time="04:00"><span class="time">04:00</span><span class="who">Cordelia · Maggie<span class="role">library + media dawn</span></span></div>
+        <div class="row" data-time="06:30"><span class="time">06:30</span><span class="who">Eleanor<span class="role">morning garden</span></span></div>
+        <div class="row" data-time="07:00"><span class="time">07:00</span><span class="who">Iris · <b>Kate</b><span class="role">EV check + morning brief</span></span></div>
+        <div class="row" data-time="07:30"><span class="time">07:30</span><span class="who">Vivian<span class="role">finance morning</span></span></div>
+        <div class="row" data-time="08:00"><span class="time">08:00</span><span class="who">Anya · Maggie<span class="role">pets + media</span></span></div>
+        <div class="row" data-time="09:15"><span class="time">09:15</span><span class="who">Mariah<span class="role">program manager (1/4)</span></span></div>
+        <div class="row" data-time="12:30"><span class="time">12:30</span><span class="who"><b>Kate</b><span class="role">midday brief</span></span></div>
+        <div class="row" data-time="13:15"><span class="time">13:15</span><span class="who">Mariah</span></div>
+        <div class="row" data-time="16:00"><span class="time">16:00</span><span class="who">Iris<span class="role">afternoon EV</span></span></div>
+        <div class="row" data-time="17:00"><span class="time">17:00</span><span class="who">Vivian</span></div>
+        <div class="row" data-time="17:15"><span class="time">17:15</span><span class="who">Mariah</span></div>
+        <div class="row" data-time="18:00"><span class="time">18:00</span><span class="who"><b>Kate</b> · Maggie<span class="role">evening brief + media</span></span></div>
+        <div class="row" data-time="18:30"><span class="time">18:30</span><span class="who">Eleanor<span class="role">evening garden</span></span></div>
+        <div class="row" data-time="20:00"><span class="time">20:00</span><span class="who">Anya<span class="role">evening pets</span></span></div>
+        <div class="row" data-time="21:15"><span class="time">21:15</span><span class="who">Mariah</span></div>
+        <div class="row" data-time="22:00"><span class="time">22:00</span><span class="who"><b>Kate</b> · Iris<span class="role">night brief + EV pre-charge</span></span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────── BRIEF MOCKUP ───────── -->
+<section id="brief">
+  <div class="wrap">
+    <div class="eyebrow">A morning brief</div>
+    <h2>Kate's 7&nbsp;AM, in your right rail.</h2>
+    <p class="lede">
+      Kate is the only specialist who produces briefs. They're a
+      sectioned synthesis — calm, mood-tagged, sourced. The deliberation
+      pass that builds it draws from every other specialist's last
+      observations.
+    </p>
+
+    <div class="brief-frame">
+      <div class="brief-titlebar">
+        <div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+        <span class="title">GET /api/briefs/latest</span>
+      </div>
+      <div class="brief-body">
+        <div class="greet">Good morning, Jasper.</div>
+        <div class="mood">mood: calm</div>
+
+        <div class="brief-section">
+          <h5>Noticed overnight</h5>
+          <ul>
+            <li>Bailey's water bowl reading dropped 22% since 18:00 — within normal but worth a glance. <span class="src">(anya)</span></li>
+            <li>UniFi flagged a new device on guest VLAN: <code>Engage-16T</code> — that's the kiosk, marked known. <span class="src">(cassandra)</span></li>
+            <li>Soil moisture sensor on the south bed is 12% — Eleanor wants to know if you'd like her to nudge the drip schedule. <span class="src">(eleanor)</span></li>
+          </ul>
+        </div>
+
+        <div class="brief-section">
+          <h5>Attention today</h5>
+          <ul>
+            <li>09:30 — Bailey's transfusion follow-up at the clinic. <strong>Leave by 09:05</strong> (12-min drive, 13 with current traffic). <span class="src">(kate · maps)</span></li>
+            <li>Ioniq 5 at 64%. Today's routed distance: 41 mi. <strong>Easily fits</strong>; no charging needed. <span class="src">(iris · plan_ev_day)</span></li>
+          </ul>
+        </div>
+
+        <div class="brief-section">
+          <h5>Ready for your nod</h5>
+          <ul>
+            <li>Vivian flagged your credit union recurring auto-pay to <strong>renew Friday</strong>. Pre-drafted note. <span class="pill warn">approve</span></li>
+            <li>Maggie surfaced two indie shows next month — South Arcade @ Midtown, Honey Revenge @ Marquis. Watchlist hit. <span class="pill">review</span></li>
+          </ul>
+        </div>
+
+        <div class="brief-section">
+          <h5>Watching</h5>
+          <ul>
+            <li>Alex's birthday is in <strong>11 days</strong>. Last contact: 47 days ago. <span class="src">(concierge)</span><span class="typewriter">&nbsp;</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────── TOOL BELT ───────── -->
+<section id="tools">
+  <div class="wrap">
+    <div class="eyebrow">The tool belt</div>
+    <h2>Connectors, by what they reach for.</h2>
+    <p class="lede">
+      Every tool declares <code>required_capabilities</code>; every
+      specialist's YAML declares the granted set. The ToolRegistry
+      denies any call missing a required capability and returns a
+      structured error the LLM can route around.
+    </p>
+
+    <h4 style="margin-top: 36px;">Vault &amp; Memory</h4>
+    <div class="tools-grid">
+      <div class="tool">
+        <div class="head"><div class="glyph">📓</div><div class="name">Scribe</div></div>
+        <p>The write agent for the vault. All 5 tools are <code>write_internal</code>, auto-approved.</p>
+        <div class="tools-list">append_journal_entry · find_or_create_person · upsert_person_note · record_decision · link_notes</div>
+        <div class="who">used by everyone via /scribe/*</div>
+      </div>
+      <div class="tool">
+        <div class="head"><div class="glyph">🔎</div><div class="name">Concierge</div></div>
+        <p>Read tools for relationships. The daily brief lives here.</p>
+        <div class="tools-list">surface_relationship_signal · upcoming_dates · contact_history</div>
+        <div class="who">consumed by Kate's briefs</div>
+      </div>
+      <div class="tool">
+        <div class="head"><div class="glyph">📚</div><div class="name">Library (FTS5)</div></div>
+        <p>Per-specialist scoped library with full-text-search and chunked retrieval.</p>
+        <div class="tools-list">search_library · read_note · ingest_to_library</div>
+        <div class="who">Cordelia + all specialists</div>
+      </div>
+      <div class="tool">
+        <div class="head"><div class="glyph">📥</div><div class="name">Inbox pipeline</div></div>
+        <p>PDF / DOCX / HTML / image / URL → markdown wrapper note → SQLite projection.</p>
+        <div class="tools-list">/inbox · turndown · unpdf · mammoth · readability</div>
+        <div class="who">web UI · share sheet · Cordelia</div>
+      </div>
+      <div class="tool">
+        <div class="head"><div class="glyph">🧾</div><div class="name">Audit query</div></div>
+        <p>Inspect every tool call ever made — by whom, when, with what args, what result.</p>
+        <div class="tools-list">query_audit_log</div>
+        <div class="who">Cassandra · Mariah · Beatrice · Kate</div>
+      </div>
+    </div>
+
+    <h4 style="margin-top: 32px;">House &amp; Environment</h4>
+    <div class="tools-grid">
+      <div class="tool">
+        <div class="head"><div class="glyph">🏠</div><div class="name">Home Assistant</div></div>
+        <p>The household's nervous system. State, attributes, calendars, and Jasper's live location.</p>
+        <div class="tools-list">ha_get_state · ha_list_entities · ha_calendar_query · ha_calendar_create_event · ha_get_my_location</div>
+        <div class="who">Kate · Iris · Cassandra · Eleanor · Brigid</div>
+      </div>
+      <div class="tool">
+        <div class="head"><div class="glyph">📅</div><div class="name">CalDAV</div></div>
+        <p>Calendar events in next N days via tsdav. The source of "what's on tomorrow."</p>
+        <div class="tools-list">caldav_upcoming</div>
+        <div class="who">Kate · Iris · Vivian · Eleanor · Anya · Brigid · Maggie</div>
+      </div>
+      <div class="tool">
+        <div class="head"><div class="glyph">🗺️</div><div class="name">Maps (local)</div></div>
+        <p>OSRM (drive/bike/walk) + Nominatim + Overpass. Mapbox / Google opt-in for traffic ETA.</p>
+        <div class="tools-list">geocode · route · nearby · distance_matrix</div>
+        <div class="who">Kate · Iris · Eleanor</div>
+      </div>
+      <div class="tool">
+        <div class="head"><div class="glyph">📍</div><div class="name">Places</div></div>
+        <p>Vault namespace symmetric with People. Upsert significant locations.</p>
+        <div class="tools-list">upsert_place</div>
+        <div class="who">Kate · Iris · Eleanor</div>
+      </div>
+      <div class="tool">
+        <div class="head"><div class="glyph">🛡️</div><div class="name">UniFi</div></div>
+        <p>Live read of the household network — APs, switches, gateway, clients, Protect cameras.</p>
+        <div class="tools-list">unifi_topology · unifi_security_snapshot · unifi_protect_events</div>
+        <div class="who">Cassandra</div>
+      </div>
+      <div class="tool">
+        <div class="head"><div class="glyph">🚗</div><div class="name">FRIDAY system</div></div>
+        <p>Status of the kiosk dashboard — voice, watchdog, EV charge, modules.</p>
+        <div class="tools-list">friday_status</div>
+        <div class="who">Iris · Kate</div>
+      </div>
+    </div>
+
+    <h4 style="margin-top: 32px;">Media &amp; Taste</h4>
+    <div class="tools-grid">
+      <div class="tool">
+        <div class="head"><div class="glyph">🎵</div><div class="name">MusicKit / Apple Music</div></div>
+        <p>Real listening history. The taste signal Maggie reasons from.</p>
+        <div class="tools-list">music_recent_tracks · music_heavy_rotation · music_top_artists · music_recommendations · music_now_playing</div>
+        <div class="who">Maggie</div>
+      </div>
+      <div class="tool">
+        <div class="head"><div class="glyph">🎬</div><div class="name">Plex (Tautulli)</div></div>
+        <p>Watch history, heavy rotation, ratings, library sections.</p>
+        <div class="tools-list">plex_history · plex_heavy_rotation · plex_ratings · plex_library_sections</div>
+        <div class="who">Maggie</div>
+      </div>
+      <div class="tool">
+        <div class="head"><div class="glyph">📡</div><div class="name">*arr stack</div></div>
+        <p>Sonarr · Radarr · Lidarr · Readarr. Search libraries, queues, calendars; trigger grabs.</p>
+        <div class="tools-list">media_search · media_library · media_add</div>
+        <div class="who">Cordelia · Maggie</div>
+      </div>
+      <div class="tool">
+        <div class="head"><div class="glyph">🌊</div><div class="name">qBittorrent</div></div>
+        <p>Magnet/URL → categorized download with save path. List, filter, remove.</p>
+        <div class="tools-list">torrent_add · torrent_list · torrent_remove</div>
+        <div class="who">Cordelia (manage_torrents)</div>
+      </div>
+      <div class="tool">
+        <div class="head"><div class="glyph">▶️</div><div class="name">MeTube / yt-dlp</div></div>
+        <p>Queue YouTube downloads. List queue. Clear completed.</p>
+        <div class="tools-list">youtube_download · youtube_queue_list · youtube_queue_clear</div>
+        <div class="who">Cordelia · Maggie</div>
+      </div>
+    </div>
+
+    <h4 style="margin-top: 32px;">Kitchen &amp; Web</h4>
+    <div class="tools-grid">
+      <div class="tool">
+        <div class="head"><div class="glyph">🍳</div><div class="name">Mealie</div></div>
+        <p>Recipe + meal-plan platform. Search, get, schedule, import from URL.</p>
+        <div class="tools-list">mealie_search_recipes · mealie_get_recipe · mealie_get_meal_plan_history · mealie_set_meal_plan · mealie_import_recipe_url</div>
+        <div class="who">Brigid</div>
+      </div>
+      <div class="tool">
+        <div class="head"><div class="glyph">🔍</div><div class="name">SearXNG (local)</div></div>
+        <p>Privacy-preserving metasearch. The first hop for any web answer.</p>
+        <div class="tools-list">web_search</div>
+        <div class="who">every specialist with query_web</div>
+      </div>
+      <div class="tool">
+        <div class="head"><div class="glyph">📰</div><div class="name">Firecrawl</div></div>
+        <p>URL → clean markdown. The default-grade web fetch.</p>
+        <div class="tools-list">web_fetch_clean</div>
+        <div class="who">every specialist with query_web</div>
+      </div>
+      <div class="tool">
+        <div class="head"><div class="glyph">🦊</div><div class="name">the workstation browser</div></div>
+        <p>Real warmed Firefox on a real GPU. The escape hatch for Cloudflare and PerimeterX.</p>
+        <div class="tools-list">browse_url</div>
+        <div class="who">Maggie (browse_web capability)</div>
+      </div>
+      <div class="tool">
+        <div class="head"><div class="glyph">🎨</div><div class="name">ComfyUI</div></div>
+        <p>Stable-diffusion image generation. Queues a render and returns it.</p>
+        <div class="tools-list">comfyui_generate_image</div>
+        <div class="who">opt-in, key in env</div>
+      </div>
+      <div class="tool">
+        <div class="head"><div class="glyph">🧠</div><div class="name">Consult deep model</div></div>
+        <p>Mid-turn handoff of one hard, scoped sub-question to a depth-tuned roll of the same model.</p>
+        <div class="tools-list">consult_deep_model · consult_specialist</div>
+        <div class="who">every specialist</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────── TOOL CALL FLOW ───────── -->
+<section>
+  <div class="wrap">
+    <div class="eyebrow">Anatomy of a tool call</div>
+    <h2>From "Hey Kate" to vault write.</h2>
+    <p class="lede">Every external effect crosses three checkpoints: capability, policy, audit. Reads cross two: capability and audit.</p>
+
+    <div class="toolcall">
+      <svg viewBox="0 0 1000 220" role="img" aria-label="Tool call flow">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#ff8a4c" />
+          </marker>
+        </defs>
+
+        <!-- Boxes -->
+        <g font-family="ui-monospace,monospace" font-size="11">
+          <g>
+            <rect x="20" y="90" width="120" height="64" rx="8" fill="#2a201a" stroke="#44342a" />
+            <text x="80" y="116" text-anchor="middle" fill="#ffb380">SpecialistRuntime</text>
+            <text x="80" y="134" text-anchor="middle" fill="#8a7a66">LLM emits tool_call</text>
+          </g>
+          <g>
+            <rect x="180" y="90" width="120" height="64" rx="8" fill="#2a201a" stroke="#44342a" />
+            <text x="240" y="112" text-anchor="middle" fill="#ffb380">ToolRegistry</text>
+            <text x="240" y="128" text-anchor="middle" fill="#8a7a66">capability check</text>
+            <text x="240" y="144" text-anchor="middle" fill="#8a7a66">+ Zod validate args</text>
+          </g>
+          <g>
+            <rect x="340" y="90" width="120" height="64" rx="8" fill="#2a201a" stroke="#44342a" />
+            <text x="400" y="112" text-anchor="middle" fill="#ffb380">PolicyGateway</text>
+            <text x="400" y="128" text-anchor="middle" fill="#8a7a66">YAML rules</text>
+            <text x="400" y="144" text-anchor="middle" fill="#8a7a66">auto · approve · deny</text>
+          </g>
+          <g>
+            <rect x="500" y="90" width="120" height="64" rx="8" fill="#2a201a" stroke="#44342a" />
+            <text x="560" y="116" text-anchor="middle" fill="#ffb380">Tool.execute()</text>
+            <text x="560" y="134" text-anchor="middle" fill="#8a7a66">side effect</text>
+          </g>
+          <g>
+            <rect x="660" y="90" width="120" height="64" rx="8" fill="#2a201a" stroke="#44342a" />
+            <text x="720" y="112" text-anchor="middle" fill="#ffb380">audit_log</text>
+            <text x="720" y="128" text-anchor="middle" fill="#8a7a66">SQLite +</text>
+            <text x="720" y="144" text-anchor="middle" fill="#8a7a66">System/Audit/&lt;date&gt;.md</text>
+          </g>
+          <g>
+            <rect x="820" y="90" width="160" height="64" rx="8" fill="#2a201a" stroke="#44342a" />
+            <text x="900" y="112" text-anchor="middle" fill="#ffb380">SSE event bus</text>
+            <text x="900" y="128" text-anchor="middle" fill="#8a7a66">/app/api/events</text>
+            <text x="900" y="144" text-anchor="middle" fill="#8a7a66">live UI update</text>
+          </g>
+        </g>
+
+        <!-- Arrows -->
+        <g stroke="#ff8a4c" stroke-width="2" fill="none" marker-end="url(#arr)" class="flow">
+          <line x1="140" y1="122" x2="180" y2="122" />
+          <line x1="300" y1="122" x2="340" y2="122" />
+          <line x1="460" y1="122" x2="500" y2="122" />
+          <line x1="620" y1="122" x2="660" y2="122" />
+          <line x1="780" y1="122" x2="820" y2="122" />
+        </g>
+
+        <!-- Approval branch -->
+        <g stroke="#d9a04f" stroke-width="2" fill="none" marker-end="url(#arr)" stroke-dasharray="4 4">
+          <path d="M 400 90 Q 400 30 540 30" />
+        </g>
+        <g font-family="ui-monospace,monospace" font-size="11">
+          <rect x="540" y="14" width="160" height="32" rx="6" fill="#2a201a" stroke="#d9a04f" />
+          <text x="620" y="34" text-anchor="middle" fill="#d9a04f">ApprovalStore → Telegram</text>
+        </g>
+        <g stroke="#d9a04f" stroke-width="2" fill="none" marker-end="url(#arr)" stroke-dasharray="4 4">
+          <path d="M 700 30 Q 720 30 720 90" />
+        </g>
+
+        <text x="500" y="200" text-anchor="middle" fill="#8a7a66" font-family="ui-monospace,monospace" font-size="11">Every box logs to audit_log. Every box can refuse. The user can read the whole story.</text>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ───────── TRUST LADDER ───────── -->
+<section id="trust">
+  <div class="wrap">
+    <div class="eyebrow">Tiered autonomy</div>
+    <h2>Trust graduates, narrowly.</h2>
+    <p class="lede">
+      The gauge fills with category-signature approvals
+      <em>without edits</em>. Edits or denials cost. Sensitive, legal,
+      medical, first-contact, and over-cap categories never auto-graduate
+      regardless of count. The user always approves the graduation
+      itself.
+    </p>
+
+    <div class="ladder">
+      <div class="rung t1">
+        <div class="tier">1</div>
+        <div class="desc">Read<small>Vault lookups, audit queries, external read-only feeds.</small></div>
+        <div class="gauge"><div class="fill"></div></div>
+      </div>
+      <div class="rung t2a">
+        <div class="tier">2a</div>
+        <div class="desc">Write internal<small>Vault writes — journal entries, person notes, decisions, places. Reversible; the audit log shows exactly what changed.</small></div>
+        <div class="gauge"><div class="fill"></div></div>
+      </div>
+      <div class="rung t2b">
+        <div class="tier">2b</div>
+        <div class="desc">Send external, low-stakes<small>Text to family, email to a frequent colleague. Defaults to approve; graduates per recipient.</small></div>
+        <div class="gauge"><div class="fill"></div></div>
+      </div>
+      <div class="rung t2c">
+        <div class="tier">2c</div>
+        <div class="desc">Send external, high-stakes<small>First-contact emails, sensitive recipients, novel categories. Approval-only; never auto-graduates.</small></div>
+        <div class="gauge"><div class="fill"></div></div>
+      </div>
+      <div class="rung t3">
+        <div class="tier">3</div>
+        <div class="desc">Spend money or commit time<small>Bookings, purchases, calendar invites to others. Approval-required with a cooldown.</small></div>
+        <div class="gauge"><div class="fill"></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────── SURFACES ───────── -->
+<section id="surfaces">
+  <div class="wrap">
+    <div class="eyebrow">Surfaces</div>
+    <h2>Same staff, every screen.</h2>
+    <p class="lede">
+      Conversations are keyed by <code>(user_id, specialist_id)</code>,
+      not by surface. Text Kate from Telegram this morning, open
+      <code>/app</code> from your laptop this afternoon, and the thread
+      continues with the same memory. Each message records its surface
+      so the UI can show a small phone / laptop / mic glyph next to its
+      timestamp.
+    </p>
+
+    <div class="surfaces">
+      <div class="surface">
+        <div class="head"><div class="glyph">💻</div><div class="name">/app — the unified web UI</div></div>
+        <div class="body">
+          <p>Three-pane on desktop (staff rail · per-specialist thread · context). Tabbed on mobile. PWA-installable. Realtime via SSE.</p>
+          <div class="chat">
+            <div class="msg user">Kate, what's on for tomorrow?</div>
+            <div class="msg kate"><span class="who">Kate · 06:58</span>
+              Three things on the calendar — the clinic at 09:30 (Bailey follow-up), Vivian flagged a Friday auto-pay, and Eleanor wants a five-minute conversation about the south bed. Want me to walk through any of them?
+            </div>
+            <div class="msg user">Yeah, walk me through Vivian's flag.</div>
+            <div class="msg kate"><span class="who">Kate · consults Vivian</span>
+              your credit union is set to auto-pay the renewal on Friday — same amount as last year. Vivian's pre-drafted a hold-and-reroute note for the migration to your other credit union, since this is the first cycle since the merger. Approve to send, or want to edit it first?
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="surface">
+        <div class="head"><div class="glyph">📱</div><div class="name">Hearth iOS app · native SwiftUI client</div></div>
+        <div class="body">
+          <p>Native iOS app over Tailscale TLS to <code>your-llm-host.your-tailnet.ts.net</code>. <strong>Cordelia universal capture</strong> — long-press to voice-record, share-sheet, camera, photo library — fans out to the right specialist via on-device Vision OCR + classifier. <strong>APNs push</strong> lands approvals on the lock screen; Live Activities track in-progress flows.</p>
+          <div class="tg-frame">
+            <div class="tg-user">📷 long-press capture · museum visit (4 photos)</div>
+            <div class="tg-bubble">
+              <strong>Cordelia</strong> routed in parallel:<br />
+              <span style="color:#8bb37a;">→ Marguerite</span> · 2 placards added to family-history queue<br />
+              <span style="color:#8bb37a;">→ Maggie</span> · gift-shop concert poster filed (Telluride 2026-07-09)<br />
+              <span style="color:#8bb37a;">→ Brigid</span> · cafe menu, no action needed (FYI only)
+            </div>
+            <div class="tg-user">🎤 hold-to-record (3s · transcribed on-device)</div>
+            <div class="tg-bubble">
+              <em>"Brigid, the Aldi salmon was great — keep buying it."</em>
+              <div style="margin-top: 8px;">
+                <strong>Brigid</strong> updated taste signals (<code>protein.salmon.aldi: positive</code>).
+              </div>
+            </div>
+            <div class="tg-bubble" style="border-left: 3px solid #ff8a4c; padding-left: 10px;">
+              <strong>🔔 Lock screen</strong> — Vivian flagged a duplicate subscription ($14.99 · Headspace).
+              <div class="tg-keyboard">
+                <button>✓ Cancel for me</button>
+                <button>✗ Keep both</button>
+                <button>📝 Edit</button>
+                <button>⏰ Snooze</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p style="margin-top: 18px; font-size: 13px; color: var(--dim);">
+      Pass 8 adds <strong>Pipecat real-time voice</strong> bidirectional with a small fast model on a <code>voice_realtime</code> role. The mic button in <code>/app</code> already does voice-in; voice-out is the next surface.
+    </p>
+  </div>
+</section>
+
+<!-- ───────── NOVEL BITS ───────── -->
+<section id="novel">
+  <div class="wrap">
+    <div class="eyebrow">Novel bits</div>
+    <h2>The interesting parts.</h2>
+    <p class="lede">
+      Things that aren't obvious from the architecture diagram — patterns
+      that fell out of running the system and noticing what was actually
+      hard.
+    </p>
+
+    <div class="novel">
+      <div class="item">
+        <span class="tag">Pattern</span>
+        <h3>Per-turn tool curation</h3>
+        <p>
+          Capability gating decides what a specialist <em>may</em> invoke.
+          Curation decides what the model <em>sees</em> on a given turn.
+          Past ~15 tools, Qwen 3.6 starts emitting empty-args. Iris carried
+          25 resolved tools uncurated and timed out on every turn until
+          <code>tools_for_chat</code> was set.
+        </p>
+      </div>
+
+      <div class="item">
+        <span class="tag">Pattern</span>
+        <h3>Kate as router, not forwarder</h3>
+        <p>
+          Every non-Kate-originated interrupt routes to her inbox. She
+          either <strong>absorbs</strong> (most cases — logs what she did
+          instead) or <strong>promotes</strong> (rare). The absorb/promote
+          ratio over time is the metric for whether her filtering is
+          well-calibrated.
+        </p>
+      </div>
+
+      <div class="item">
+        <span class="tag">Pattern</span>
+        <h3>the workstation: the browser escape hatch</h3>
+        <p>
+          Maggie hits a Cloudflare-walled venue calendar. Firecrawl
+          returns empty markdown. Next round: <code>browse_url</code> on
+          the same URL, which wakes the workstation over WoL, spawns a nested
+          KWin + warmed Firefox on a real NVIDIA GPU, pulls the page,
+          tears down, sleeps. The fingerprint passes because the browser
+          is real.
+        </p>
+      </div>
+
+      <div class="item">
+        <span class="tag">Pattern</span>
+        <h3>Closed-loop self-healing</h3>
+        <p>
+          Mariah scans daily for failed work, drifted patterns, and
+          misaligned configs. Work-failures route back to authors;
+          config-failures escalate to Beatrice, who proposes a YAML or
+          code change. Jasper approves it; the path-allowlisted PR
+          machinery ships it. Detection autonomous; shipping never.
+        </p>
+      </div>
+
+      <div class="item">
+        <span class="tag">Pattern</span>
+        <h3>Kate learning Jasper's voice</h3>
+        <p>
+          <code>observe_jasper_voice</code> runs as a background batch
+          pass over recent turns. Stylistic observations land in
+          <code>Knowledge/Kate/jasper_style/</code>. Periodically
+          <code>distill_jasper_style</code> rebuilds the profile from
+          bullets + writing corpus. <code>draft_message</code> reads
+          from that profile so the draft sounds like Jasper, not Kate.
+        </p>
+      </div>
+
+      <div class="item">
+        <span class="tag">Pattern</span>
+        <h3>Maggie's taste graph</h3>
+        <p>
+          MusicKit + Plex listening signal flows into a taste profile.
+          The artist watchlist scores affinity. The venue watchlist
+          stores calendar URLs. <code>add_concert_history</code> writes
+          atomically to both. The morning brief surfaces matched shows
+          only when affinity × proximity × novelty crosses threshold.
+        </p>
+      </div>
+
+      <div class="item">
+        <span class="tag">Pattern</span>
+        <h3>Canned fallbacks don't re-poison history</h3>
+        <p>
+          When a turn fails, the user sees a real fallback message in
+          the conversation. But <code>is_fallback_message()</code> skips
+          it when rebuilding the LLM context — otherwise the model reads
+          the timeout string as an exemplar reply and parrots it on
+          every later turn.
+        </p>
+      </div>
+
+      <div class="item">
+        <span class="tag">Pattern</span>
+        <h3>Location is the most privileged data</h3>
+        <p>
+          Three defense-in-depth layers: capability flag, allowlist in
+          <code>privacy.yaml</code>, and <code>redact_for_audit()</code>
+          that rounds coords to 3 decimals and strips street-level
+          addresses. <code>ha_get_my_location</code> audits only zone +
+          confidence, never raw coords.
+        </p>
+      </div>
+
+      <div class="item">
+        <span class="tag">Pattern</span>
+        <h3>Cross-surface continuity</h3>
+        <p>
+          Threads are keyed by <code>(user, specialist)</code>, not
+          surface. The relay creates a new conversation when the most
+          recent activity is &gt;24h old — "morning's chat" and "tonight's
+          chat" are usually different threads. Below 24h, the thread
+          continues across Telegram, web, and (soon) voice.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────── VAULT ───────── -->
+<section id="vault">
+  <div class="wrap">
+    <div class="eyebrow">Memory &amp; vault</div>
+    <h2>Anything you might read in five years is markdown.</h2>
+    <p class="lede">
+      Vault notes, audit log, system prompts, persona files, specialist
+      memory — all plain markdown with YAML frontmatter. SQLite holds
+      derived projections (fast queries, FTS5, graph edges, idempotency
+      keys). If SQLite corrupts tomorrow, <code>bun run ingestor:rebuild</code> walks the
+      vault and reprojects.
+    </p>
+
+    <div class="grid grid-2" style="margin-top: 28px;">
+      <div class="card">
+        <h4>Source of truth</h4>
+        <h3>~/vault-friday/</h3>
+        <p>People, Journal, Decisions, Inbox, Calendar, Accounts, Animals, Places. Plus <code>Knowledge/&lt;Specialist&gt;/</code> per-specialist namespaces with library/ and memory.md.</p>
+        <pre style="background: var(--bg); padding: 12px; border-radius: 8px; font-family: var(--mono); font-size: 12px; color: var(--ember-2); overflow: auto; margin: 12px 0 0;">
+~/vault-friday/
+├── People/                 shared
+├── Journal/                shared
+├── Decisions/              shared
+├── Inbox/                  shared (clippings)
+├── Places/                 shared
+├── System/Audit/           daily markdown audit
+└── Knowledge/
+    ├── Kate/               memory.md · jasper_style.md
+    ├── Vivian/             finance library
+    ├── Cassandra/          security library
+    ├── Maggie/             taste · artist + venue watchlists
+    └── ...</pre>
+      </div>
+      <div class="card">
+        <h4>Derived projection</h4>
+        <h3>data/hearth.db (SQLite WAL)</h3>
+        <p>One file, shared by orchestrator + ingestor + scheduler. Tables: <code>people</code>, <code>journal_entries</code>, <code>clippings</code>, <code>places</code>, <code>graph_edges</code>, <code>audit_log</code>, <code>chunks_fts</code> (FTS5), <code>approvals</code>, <code>proposals</code>, <code>scheduled_tasks</code>, <code>briefs</code>, <code>conversations</code>, <code>messages</code>, <code>process_misses</code>.</p>
+        <p style="margin-top: 12px;">All <code>CREATE</code>s are <code>IF NOT EXISTS</code>. Schema migrations bump <code>SCHEMA_VERSION</code> and add explicit <code>ALTER</code>s — never drop columns silently.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────── ROADMAP ───────── -->
+<section id="roadmap">
+  <div class="wrap">
+    <div class="eyebrow">Roadmap</div>
+    <h2>Shipped → next → scalability.</h2>
+    <p class="lede">
+      Past 5 the prompts re-numbered around the architectural pivot
+      (Hearth became a pure tool server, Hermes became the LLM-driven
+      planner). The shape of "trust earned narrowly over time" lets the
+      roadmap stay incremental.
+    </p>
+
+    <div class="roadmap">
+      <div class="road-row done"><div class="stage">Pass 1–5</div><div class="what">Scribe · gateway stub · Hermes shift · ingestor · real approval gateway · Concierge + scheduler<small>The vertical slice. Hearth becomes a tool server; Hermes becomes the planner. Daily brief lights up at 7 AM.</small></div></div>
+      <div class="road-row done"><div class="stage">Pass 6a</div><div class="what">Specialist runtime — 7 personas, capabilities, proposals, three loops, connectors<small>Kate · Vivian · Anya · Eleanor · Marguerite · Iris · Cassandra. The staff abstraction lands.</small></div></div>
+      <div class="road-row done"><div class="stage">Pass 6b</div><div class="what">The unified web UI at /app<small>Three-pane on desktop, tabbed on mobile, PWA-installable, SSE-driven, hiring modal.</small></div></div>
+      <div class="road-row done"><div class="stage">Pass 6c</div><div class="what">Proactive staff loop · awareness handlers · deliberation envelopes · Kate-as-router · briefs · weekly memory.md compaction</div></div>
+      <div class="road-row done"><div class="stage">Pass 7</div><div class="what">Hermes thin-client refactor · push receiver · voice IN (faster-whisper) · quiet hours · slash commands</div></div>
+      <div class="road-row done"><div class="stage">Pass 7.5</div><div class="what">Spatial awareness · OSRM + Nominatim + Overpass · HA location · Places namespace · privacy redaction</div></div>
+      <div class="road-row done"><div class="stage">Pass 7.6</div><div class="what">the workstation browser surface · agentd · WoL · nested KWin · warmed Firefox · <code>browse_url</code></div></div>
+      <div class="road-row done"><div class="stage">+ Cordelia · Maggie · Brigid · Mariah · Beatrice<small>The roster grew: Master Librarian · Media &amp; Collections · Cook · Program Manager · Enterprise Trainer.</small></div></div>
+      <div class="road-row next"><div class="stage">Pass 8</div><div class="what">Pipecat real-time voice OUT<small>Small fast model in a <code>voice_realtime</code> role for sub-second turns. Persona compression for naturalness.</small></div></div>
+      <div class="road-row future"><div class="stage">Pass 9</div><div class="what">Send capabilities — SMTP · Twilio · eventually Lob<small>Each tier-graduates independently. The first time the system composes-and-sends.</small></div></div>
+      <div class="road-row future"><div class="stage">Pass 10</div><div class="what">Browser Use for Tier 2c web actions<small>Default-deny, per-site exceptions. Reserve a table, fill a form, navigate a government site.</small></div></div>
+      <div class="road-row future"><div class="stage">Pass 11</div><div class="what">Per-specialist proactive monitoring — Plaid for Vivian, HA logs for Cassandra, etc.<small>Each specialist gets their own awareness loop with their own interrupt budget.</small></div></div>
+      <div class="road-row future"><div class="stage">Retrieval</div><div class="what">Embeddings (bge-large) + FTS5 + RRF rerank<small>Lights up real semantic recall in specialist turns. Scope-filtered by specialist's knowledge_scope.</small></div></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Scalability vectors</h3>
+    <p class="lede">Where the design has room to grow as the household grows.</p>
+
+    <div class="grid grid-2" style="margin-top: 18px;">
+      <div class="card">
+        <h4>Multi-user</h4>
+        <h3>Per-user voice &amp; privacy</h3>
+        <p>
+          Brigid's per-user diet store (<code>users/&lt;name&gt;/brigid/**</code>)
+          is the template. The next move: a per-user knowledge_scope
+          overlay so each household member has their own private journal
+          and finance namespace. Conversations stay keyed by
+          <code>(user_id, specialist_id)</code>.
+        </p>
+      </div>
+
+      <div class="card">
+        <h4>Cross-user privacy</h4>
+        <h3>Kate &amp; Cassandra as sensitivity gates</h3>
+        <p>
+          A request from User B that touches User A's data routes
+          through Kate (sensitivity classifier) and Cassandra (policy
+          check) before any specialist sees it. Financials, medical,
+          PII, confidential decisions → denied or summarized to public
+          shape. The audit log captures every cross-user query for
+          inspection.
+        </p>
+      </div>
+
+      <div class="card">
+        <h4>Trend &amp; taste mining</h4>
+        <h3>Maggie's signal stack, generalized</h3>
+        <p>
+          The taste-graph / watchlist / heavy-rotation pattern fits any
+          preference domain. Vivian's spending trends. Eleanor's planting
+          success rates. Anya's pet-health baselines. Each becomes a
+          per-specialist "taste profile" that the morning brief draws
+          from when novelty × relevance crosses threshold.
+        </p>
+      </div>
+
+      <div class="card">
+        <h4>Voice imitation, generalized</h4>
+        <h3>Each specialist learns the user they speak to</h3>
+        <p>
+          Kate's <code>observe → distill → draft</code> loop is per-user
+          today. With multi-user, each specialist maintains a per-user
+          style profile and drafts in the addressed user's voice — your
+          Brigid sounds like you when she's drafting a follow-up to a
+          recipe; your partner's Brigid sounds like them.
+        </p>
+      </div>
+
+      <div class="card">
+        <h4>Browser surface, fleet</h4>
+        <h3>One agentd port, many warmed profiles</h3>
+        <p>
+          Today Maggie is the only browser-using specialist; v1 agentd
+          serializes sessions. v2 lifts that by spawning parallel nested
+          KWin compositors per agent profile. The contract — one auth
+          token, one port, per-agent warmed Firefox — is already shaped
+          for it.
+        </p>
+      </div>
+
+      <div class="card">
+        <h4>Self-improvement loop</h4>
+        <h3>Beatrice + Mariah, broader scope</h3>
+        <p>
+          Today: detect misconfigured specialists, propose YAML/code
+          edits, Jasper approves the PR. Next: detect persona drift across
+          weeks of conversation, propose calibration. Then: detect
+          successful patterns across users (with consent), surface them
+          as cross-household best practices — never auto-applied, always
+          opt-in per household.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────── PORTABILITY ───────── -->
+<section id="port">
+  <div class="wrap">
+    <div class="eyebrow">Run it yourself</div>
+    <h2>What you'd need.</h2>
+    <p class="lede">
+      Hearth is local-first by design. The vault is your data on your
+      disk. The model runs on hardware you own. The only outbound default
+      is Telegram (because you're the consumer).
+    </p>
+
+    <div class="port-cols">
+      <div class="port-col">
+        <h3>Hardware</h3>
+        <ul>
+          <li><strong>Always-on box</strong> — anything that can run Bun + SQLite + Hono. A NUC, a Pi 5, an old desktop. ~2 GB RAM headroom for Hearth itself; more if you also host the LLM here.</li>
+          <li><strong>LLM host</strong> — 16+ GB VRAM for the 9B Heretic; 24+ GB for the 27B Q4. A 3090 or 4090 works; a the integrated AI accelerator's 96 GB unified memory works; Apple Silicon with ≥48 GB unified works.</li>
+          <li><strong>Optional browser host</strong> — a box with a real GPU for WebGL fingerprint authenticity. Wake-on-LAN capable so it can sleep when idle.</li>
+          <li><strong>Phone</strong> — for HA Companion location reporting, and for the Telegram surface.</li>
+        </ul>
+      </div>
+
+      <div class="port-col">
+        <h3>Software stack</h3>
+        <ul>
+          <li><strong>Bun</strong> (any recent version). Runtime + package manager + bundler.</li>
+          <li><strong>Ollama</strong> or <strong>llama.cpp</strong> (or beellama.cpp for DFlash decode) serving an OpenAI-compatible endpoint.</li>
+          <li><strong>Home Assistant</strong> — entities, calendars, location. Companion app on your phone.</li>
+          <li><strong>CalDAV server</strong> — Radicale, Baikal, Nextcloud, or iCloud via tsdav.</li>
+          <li><strong>SearXNG + Firecrawl</strong> — local containers for web search and fetch.</li>
+          <li><strong>OSRM + Nominatim</strong> — local docker-compose stack for offline routing.</li>
+          <li><strong>Mealie · Plex (Tautulli) · *arr · UniFi · MeTube</strong> — each optional; tools cleanly degrade when env vars absent.</li>
+          <li><strong>Hermes Agent</strong> — for Telegram. The thin-client refactor means it's a single-tool plugin.</li>
+        </ul>
+      </div>
+
+      <div class="port-col">
+        <h3>Get started</h3>
+        <ul>
+          <li><code>git clone</code> and <code>bun install</code></li>
+          <li><code>mkdir -p ~/vault-friday/{People,Journal,Decisions,Inbox,System/Audit}</code></li>
+          <li><code>cp .env.example .env</code> and set <code>HEARTH_VAULT_ROOT</code></li>
+          <li><code>bun run init:vault</code> — scaffolds the Knowledge/&lt;Specialist&gt;/ tree</li>
+          <li><code>bun run dev</code> and open <code>http://localhost:7700/app/</code></li>
+          <li><code>bun run smoke</code>, <code>bun run smoke:specialists</code>, <code>bun run smoke:proactive</code> — eleven smoke suites verify the integrated system</li>
+        </ul>
+      </div>
+
+      <div class="port-col">
+        <h3>Customization first stops</h3>
+        <ul>
+          <li><code>config/specialists/*.yaml</code> — rename, retune, or add personas. Hot-reloaded.</li>
+          <li><code>config/policies/v0.yaml</code> — what gets auto-approved, what queues. First-match-wins. Hot-reloaded.</li>
+          <li><code>config/llm-roles.yaml</code> — point at any OpenAI-compatible endpoint. Per-role model swaps.</li>
+          <li><code>config/privacy.yaml</code> — location + browse redaction, per-specialist allowlists.</li>
+          <li><code>config/autonomy.yaml</code> — graduation thresholds per tier.</li>
+          <li><code>config/notifications.yaml</code> — quiet hours, push severity thresholds.</li>
+        </ul>
+      </div>
+    </div>
+
+    <p style="margin-top: 28px; color: var(--muted); font-size: 14px;">
+      The single architectural invariant: <strong>localhost-bound by
+      default; Tailscale for remote access; never WAN-bind</strong>. The
+      threat model is "well-meaning automation overstepping," not
+      "external attacker." Adding auth scaffolding beyond what you've
+      opted into is overengineering.
+    </p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="signature">— a personal chief of staff that knows you, prepares your life, and acts on your behalf within boundaries you have calibrated.</div>
+    <div>Hearth lives at <code>/docker/hearth/repo</code> on the LLM host · vault at <code>/docker/hearth/vault/</code> · audit at <code>System/Audit/&lt;date&gt;.md</code></div>
+    <div style="margin-top: 8px;">For implementation details: <code>the private dev log</code> · for design rationale: <code>architecture.md</code></div>
+  </div>
+</footer>
+
+<script>
+  // ───────── embers ─────────
+  (function () {
+    const layer = document.getElementById('embers');
+    if (!layer) return;
+    const N = 36;
+    for (let i = 0; i < N; i++) {
+      const e = document.createElement('div');
+      e.className = 'ember-dot';
+      const left = Math.random() * 100;
+      const dur = 6 + Math.random() * 10;
+      const delay = Math.random() * 10;
+      const drift = (Math.random() - 0.5) * 200;
+      const size = 2 + Math.random() * 3;
+      e.style.left = left + '%';
+      e.style.width = size + 'px';
+      e.style.height = size + 'px';
+      e.style.animationDuration = dur + 's';
+      e.style.animationDelay = delay + 's';
+      e.style.setProperty('--drift', drift + 'px');
+      e.style.background = ['#ff8a4c', '#ffb380', '#ffcfa0'][Math.floor(Math.random() * 3)];
+      layer.appendChild(e);
+    }
+  })();
+
+  // ───────── deliberation clock ─────────
+  (function () {
+    const ticks = document.getElementById('ticks');
+    const slots = document.getElementById('slots');
+    if (!ticks || !slots) return;
+
+    const cx = 150, cy = 150;
+    const tickR = 138, hourR = 122, slotR = 100;
+
+    // 24-hour tick marks every 2h, labels every 4h
+    for (let h = 0; h < 24; h += 2) {
+      const angle = (h / 24) * Math.PI * 2 - Math.PI / 2;
+      const x1 = cx + Math.cos(angle) * tickR;
+      const y1 = cy + Math.sin(angle) * tickR;
+      const x2 = cx + Math.cos(angle) * (tickR - 6);
+      const y2 = cy + Math.sin(angle) * (tickR - 6);
+      ticks.innerHTML += `<line class="tick" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" />`;
+      if (h % 4 === 0) {
+        const tx = cx + Math.cos(angle) * hourR;
+        const ty = cy + Math.sin(angle) * hourR + 3;
+        const label = String(h).padStart(2, '0');
+        ticks.innerHTML += `<text class="hour" x="${tx}" y="${ty}" text-anchor="middle">${label}</text>`;
+      }
+    }
+
+    // Deliberation slots
+    const schedule = [
+      { t: '00:00', who: 'Cassandra' },
+      { t: '03:00', who: 'Beatrice' },
+      { t: '04:00', who: 'Cordelia · Maggie' },
+      { t: '06:30', who: 'Eleanor' },
+      { t: '07:00', who: 'Iris · Kate' },
+      { t: '07:30', who: 'Vivian' },
+      { t: '08:00', who: 'Anya · Maggie' },
+      { t: '09:15', who: 'Mariah' },
+      { t: '12:30', who: 'Kate' },
+      { t: '13:15', who: 'Mariah' },
+      { t: '16:00', who: 'Iris' },
+      { t: '17:00', who: 'Vivian' },
+      { t: '17:15', who: 'Mariah' },
+      { t: '18:00', who: 'Kate · Maggie' },
+      { t: '18:30', who: 'Eleanor' },
+      { t: '20:00', who: 'Anya' },
+      { t: '21:15', who: 'Mariah' },
+      { t: '22:00', who: 'Kate · Iris' },
+    ];
+    for (const s of schedule) {
+      const [hh, mm] = s.t.split(':').map(Number);
+      const t = hh + mm / 60;
+      const angle = (t / 24) * Math.PI * 2 - Math.PI / 2;
+      const x = cx + Math.cos(angle) * slotR;
+      const y = cy + Math.sin(angle) * slotR;
+      slots.innerHTML += `<circle class="dot" cx="${x}" cy="${y}" r="3.5" data-time="${s.t}"><title>${s.t} — ${s.who}</title></circle>`;
+    }
+
+    // ───────── highlight slot under the sweeping hand ─────────
+    // The hand is a 60s CSS animation covering 24 simulated hours.
+    // Compute hand position from performance.now() and toggle .lit
+    // on the row + dot when the hand is within TOL_HOURS of a slot.
+    const rows = document.querySelectorAll('.schedule-table .row[data-time]');
+    const dotEls = document.querySelectorAll('#slots circle[data-time]');
+    const t0 = performance.now();
+    const HOUR_TO_HAND = (h) => h;  // identity; both indexed 0..24
+    const TOL_HOURS = 0.4;            // ~1s of real-time glow as hand sweeps past
+
+    function timeToHour(s) {
+      const [h, m] = s.split(':').map(Number);
+      return h + m / 60;
+    }
+    const slotHours = Array.from(rows).map((r) => timeToHour(r.dataset.time));
+
+    function circDist(a, b) {
+      const d = Math.abs(a - b);
+      return Math.min(d, 24 - d);
+    }
+
+    function tick() {
+      const elapsed = (performance.now() - t0) / 1000;
+      const handHour = ((elapsed % 60) / 60) * 24;  // 0..24
+
+      rows.forEach((row, i) => {
+        const lit = circDist(slotHours[i], handHour) < TOL_HOURS;
+        row.classList.toggle('lit', lit);
+      });
+      dotEls.forEach((dot) => {
+        const lit = circDist(timeToHour(dot.dataset.time), handHour) < TOL_HOURS;
+        dot.classList.toggle('lit', lit);
+      });
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  })();
+</script>
+</body>
+</html>

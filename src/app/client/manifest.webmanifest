@@ -1,0 +1,31 @@
+{
+  "name": "Hearth",
+  "short_name": "Hearth",
+  "description": "Your chief of staff",
+  "start_url": "/app/",
+  "scope": "/app/",
+  "display": "standalone",
+  "background_color": "#fbfaf6",
+  "theme_color": "#7f5af0",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/app/assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app/assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app/assets/icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": false,
+    "types": ["bun-types"],
+    "baseUrl": ".",
+    "paths": {
+      "@core/*": ["src/core/*"],
+      "@memory/*": ["src/memory/*"],
+      "@agents/*": ["src/agents/*"],
+      "@inbox/*": ["src/inbox/*"],
+      "@policy/*": ["src/policy/*"],
+      "@connectors/*": ["src/connectors/*"],
+      "@specialists/*": ["src/specialists/*"],
+      "@app/*": ["src/app/*"],
+      "@library/*": ["src/library/*"],
+      "@ingestor/*": ["apps/ingestor/*"]
+    }
+  },
+  "include": ["src/**/*", "apps/**/*", "scripts/**/*"],
+  "exclude": ["node_modules", "dist", "data", "vault", "**/*__snap__*"]
+}

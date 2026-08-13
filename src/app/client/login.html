@@ -1,0 +1,837 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#030508" />
+<title>Hearth — Sign in</title>
+<link rel="icon" type="image/svg+xml" href="/app/api/avatars/kate" />
+<link rel="stylesheet" href="/app/app.css" />
+<style>
+  /* ── Boot/login surface ─ mirrors FRIDAY's boot.css verbatim where
+     possible so the two systems feel identical at sign-in. The colors
+     and dimensions are copied so a future style change in either
+     system that touches the login screen feels coordinated. ── */
+  :root {
+    --boot-bg:        #030508;
+    --boot-text:      rgba(255, 255, 255, 0.92);
+    --boot-dim:       rgba(255, 255, 255, 0.45);
+    --boot-accent:    #00c8ff;
+    --boot-accent-dim:rgba(0, 200, 255, 0.12);
+    --boot-accent-border: rgba(0, 200, 255, 0.35);
+    --boot-error:     #ff4444;
+    --boot-user-jasper: #00c8ff;
+    --boot-user-sam:  #a070e0;
+    --boot-user-guest: rgba(255, 255, 255, 0.55);
+  }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--boot-bg);
+    color: var(--boot-text);
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Subtle radial vignette so the tiles float. */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse at center,
+        rgba(0, 200, 255, 0.05) 0%,
+        transparent 60%);
+    pointer-events: none;
+  }
+  #bootOverlay {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 60px;
+  }
+  #bootIdentity {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 8px;
+    opacity: 0;
+    transform: translateY(-8px);
+    animation: bootFadeIn 0.8s ease forwards;
+  }
+  @keyframes bootFadeIn {
+    to { opacity: 1; transform: translateY(0); }
+  }
+  #bootName {
+    font-family: 'Orbitron', monospace;
+    font-size: 24px;
+    letter-spacing: 10px;
+    color: var(--boot-text);
+  }
+  #bootSub {
+    font-size: 10px;
+    letter-spacing: 6px;
+    color: var(--boot-dim);
+    text-transform: uppercase;
+  }
+  /* User tiles */
+  #bootTiles {
+    display: flex; gap: 40px; align-items: flex-end;
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity 0.6s ease 0.3s, transform 0.6s ease 0.3s;
+  }
+  #bootTiles.visible {
+    opacity: 1; transform: translateY(0);
+  }
+  .boot-tile {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 10px;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    border: none; background: none;
+    color: inherit;
+    padding: 8px 12px;
+  }
+  .boot-tile:active { transform: scale(0.94); }
+  .boot-avatar {
+    position: relative;
+    width: 72px; height: 72px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Orbitron', monospace;
+    font-size: 24px; font-weight: 600;
+    border: 1.5px solid rgba(255, 255, 255, 0.10);
+    background: rgba(255, 255, 255, 0.03);
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  .boot-tile[data-role="admin"] .boot-avatar {
+    color: var(--boot-user-jasper);
+    border-color: rgba(0, 200, 255, 0.22);
+    background: rgba(0, 200, 255, 0.06);
+  }
+  .boot-tile[data-role="user"] .boot-avatar {
+    color: var(--boot-user-sam);
+    border-color: rgba(160, 112, 224, 0.22);
+    background: rgba(160, 112, 224, 0.06);
+  }
+  .boot-tile[data-role="guest"] .boot-avatar {
+    color: var(--boot-user-guest);
+  }
+  .boot-tile:hover .boot-avatar {
+    border-color: rgba(255, 255, 255, 0.30);
+    box-shadow: 0 0 22px rgba(0, 200, 255, 0.10);
+  }
+  .boot-tile-name {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--boot-dim);
+    text-transform: uppercase;
+  }
+  /* PIN pad overlay */
+  #bootPin {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 22px;
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    pointer-events: none;
+    position: fixed; inset: 0;
+    justify-content: center;
+    z-index: 10;
+    background: rgba(3, 5, 8, 0.55);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+  #bootPin.visible {
+    opacity: 1; transform: translateY(0) scale(1);
+    pointer-events: all;
+  }
+  #bootPinName {
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: rgba(0, 200, 255, 0.6);
+    text-transform: uppercase;
+  }
+  #bootPinDots {
+    display: flex; gap: 14px;
+  }
+  .boot-dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255, 255, 255, 0.18);
+    transition: background 0.1s, border-color 0.1s, box-shadow 0.1s;
+  }
+  .boot-dot.filled {
+    background: var(--boot-accent);
+    border-color: var(--boot-accent);
+    box-shadow: 0 0 8px rgba(0, 200, 255, 0.4);
+  }
+  .boot-dot.error {
+    background: var(--boot-error);
+    border-color: var(--boot-error);
+    box-shadow: 0 0 8px rgba(255, 68, 68, 0.5);
+  }
+  #bootPinGrid {
+    display: grid;
+    grid-template-columns: repeat(3, 64px);
+    gap: 8px;
+  }
+  .boot-key {
+    height: 52px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--boot-text);
+    font-family: 'Orbitron', monospace;
+    font-size: 17px; font-weight: 500;
+    cursor: pointer;
+    transition: background 0.08s, border-color 0.08s, transform 0.06s;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .boot-key:active {
+    background: var(--boot-accent-dim);
+    border-color: var(--boot-accent-border);
+    transform: scale(0.94);
+  }
+  .boot-key-fn { opacity: 0.55; }
+  #bootPinError {
+    height: 16px;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--boot-error);
+    text-transform: uppercase;
+  }
+  #bootStatus {
+    position: fixed;
+    bottom: 24px; left: 0; right: 0;
+    text-align: center;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: rgba(255, 255, 255, 0.15);
+  }
+  @keyframes bootShake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-6px); }
+    40% { transform: translateX(6px); }
+    60% { transform: translateX(-4px); }
+    80% { transform: translateX(4px); }
+  }
+  .boot-shake { animation: bootShake 0.4s ease; }
+  /* Touch / kiosk-grade tap targets when the viewport is touch-only.
+     Mirrors FRIDAY's `body.device-kiosk` upgrade. */
+  @media (pointer: coarse) {
+    #bootEmail, #bootSetup { padding: 22px; max-width: 360px; width: 92%; }
+  }
+
+  /* Email login + first-login setup overlays — same visual register
+     as #bootPin (full-viewport flexbox card, fades in via .visible). */
+  #bootEmail, #bootSetup {
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at center, #0e1116 0%, #04060a 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    z-index: 10;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 200ms ease-out;
+  }
+  #bootEmail.visible, #bootSetup.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .boot-form-name {
+    color: rgba(255,255,255,0.9);
+    font-size: 14px;
+    letter-spacing: 3px;
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+  .boot-form-sub {
+    color: rgba(255,255,255,0.55);
+    font-size: 13px;
+    text-align: center;
+    max-width: 360px;
+    line-height: 1.5;
+    margin-bottom: 22px;
+  }
+  #bootEmailForm, #bootSetupPasswordForm, #bootSetupPinForm {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 320px;
+    max-width: 92vw;
+  }
+  #bootEmail input, #bootSetup input {
+    padding: 12px 14px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
+    color: rgba(255,255,255,0.95);
+    font: inherit;
+    font-size: 15px;
+  }
+  #bootEmail input:focus, #bootSetup input:focus {
+    outline: none;
+    border-color: rgba(127,90,240,0.55);
+    background: rgba(255,255,255,0.07);
+  }
+  .boot-form-btn {
+    padding: 12px 16px;
+    background: #7f5af0;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 4px;
+    transition: filter 120ms ease-out;
+  }
+  .boot-form-btn:hover { filter: brightness(1.12); }
+  .boot-form-btn-secondary {
+    background: transparent;
+    color: rgba(255,255,255,0.55);
+    font-weight: 400;
+    font-size: 12px;
+  }
+  .boot-form-btn-secondary:hover {
+    color: rgba(255,255,255,0.8);
+    filter: none;
+  }
+  #bootEmailError, #bootSetupError {
+    color: rgba(255,80,80,0.85);
+    font-size: 12px;
+    letter-spacing: 1px;
+    margin-top: 14px;
+    min-height: 16px;
+  }
+  #bootSetupTitle { transition: opacity 160ms ease-out; }
+
+  /* "Sign in with email →" link rendered below the tile grid. */
+  #bootEmailToggle {
+    margin-top: 32px;
+    color: rgba(255,255,255,0.55);
+    font-size: 12px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 4px 8px;
+    transition: color 120ms ease-out;
+  }
+  #bootEmailToggle:hover { color: rgba(255,255,255,0.85); }
+
+  @media (max-width: 480px) {
+    #bootPinGrid {
+      grid-template-columns: repeat(3, 88px);
+      gap: 12px;
+    }
+    .boot-key { height: 78px; border-radius: 16px; font-size: 26px; }
+    .boot-dot { width: 14px; height: 14px; }
+    .boot-avatar { width: 84px; height: 84px; font-size: 28px; }
+  }
+</style>
+</head>
+<body>
+  <div id="bootOverlay">
+    <div id="bootIdentity">
+      <div id="bootName">HEARTH</div>
+      <div id="bootSub">Sign in</div>
+    </div>
+    <div id="bootTiles" role="list" aria-label="Choose user"></div>
+    <button id="bootEmailToggle" type="button">SIGN IN WITH EMAIL →</button>
+  </div>
+
+  <div id="bootPin">
+    <div id="bootPinName"></div>
+    <div id="bootPinDots">
+      <div class="boot-dot"></div>
+      <div class="boot-dot"></div>
+      <div class="boot-dot"></div>
+      <div class="boot-dot"></div>
+    </div>
+    <div id="bootPinGrid">
+      <button class="boot-key" data-digit="1">1</button>
+      <button class="boot-key" data-digit="2">2</button>
+      <button class="boot-key" data-digit="3">3</button>
+      <button class="boot-key" data-digit="4">4</button>
+      <button class="boot-key" data-digit="5">5</button>
+      <button class="boot-key" data-digit="6">6</button>
+      <button class="boot-key" data-digit="7">7</button>
+      <button class="boot-key" data-digit="8">8</button>
+      <button class="boot-key" data-digit="9">9</button>
+      <button class="boot-key boot-key-fn" data-action="back" aria-label="Backspace">⌫</button>
+      <button class="boot-key" data-digit="0">0</button>
+      <button class="boot-key boot-key-fn" data-action="cancel" aria-label="Cancel">✕</button>
+    </div>
+    <div id="bootPinError"></div>
+  </div>
+
+  <!-- Email + password login (alternative to tile + PIN). Hidden by
+       default; toggled by the "Sign in with email" link beneath the
+       tile grid. Used by new accounts (admin created the user, set an
+       initial password, no PIN yet) and by anyone who prefers it over
+       tiles. -->
+  <div id="bootEmail">
+    <div class="boot-form-name">SIGN IN</div>
+    <form id="bootEmailForm" autocomplete="on" novalidate>
+      <input id="bootEmailInput" type="email" name="email" placeholder="email" required autocomplete="email">
+      <input id="bootEmailPw" type="password" name="password" placeholder="password" required autocomplete="current-password">
+      <button type="submit" class="boot-form-btn">Sign in</button>
+      <button type="button" class="boot-form-btn boot-form-btn-secondary" id="bootEmailCancel">Use PIN tiles instead</button>
+    </form>
+    <div id="bootEmailError"></div>
+  </div>
+
+  <!-- First-login setup. Rendered after /auth/login succeeds and the
+       response carries bootstrap.must_change_password or .must_set_pin.
+       Two phases: change password (first), set PIN (second). -->
+  <div id="bootSetup">
+    <div class="boot-form-name" id="bootSetupTitle">SET A NEW PASSWORD</div>
+    <div id="bootSetupSubtitle" class="boot-form-sub">Your account was issued with a temporary password. Choose a new one to continue.</div>
+    <form id="bootSetupPasswordForm" autocomplete="off" novalidate>
+      <input id="bootSetupNewPw" type="password" placeholder="new password (min 10)" required minlength="10" autocomplete="new-password">
+      <input id="bootSetupConfirmPw" type="password" placeholder="confirm new password" required minlength="10" autocomplete="new-password">
+      <button type="submit" class="boot-form-btn">Save password</button>
+    </form>
+    <form id="bootSetupPinForm" autocomplete="off" novalidate style="display:none">
+      <div id="bootSetupPinSubtitle" class="boot-form-sub">Now pick a 4-digit PIN. You'll use this to confirm high-risk actions like spending money.</div>
+      <input id="bootSetupNewPin" type="text" inputmode="numeric" pattern="[0-9]{4,8}" placeholder="new PIN (4-8 digits)" required maxlength="8" autocomplete="off">
+      <input id="bootSetupConfirmPin" type="text" inputmode="numeric" pattern="[0-9]{4,8}" placeholder="confirm PIN" required maxlength="8" autocomplete="off">
+      <button type="submit" class="boot-form-btn">Save PIN</button>
+    </form>
+    <div id="bootSetupError"></div>
+  </div>
+
+  <div id="bootStatus">HEARTH · MULTI-USER</div>
+
+<script type="module">
+// SHA-256 in the browser. We deliberately do NOT use crypto.subtle
+// because Web Crypto requires a secure context (HTTPS or localhost) —
+// over plain HTTP to a LAN hostname like http://your-always-on-host.local it's
+// undefined, the call would throw, and the user would tap digits
+// into a dead PIN pad. FRIDAY hit this same wall and ships a pure-JS
+// SHA-256 (see docker/homeassistant_config/www/friday/core/sha256.js);
+// we mirror it inline so the hash output is byte-identical and the
+// login page works on the same hosts as FRIDAY.
+function sha256(str) {
+  function rr(x, n) { return (x>>>n)|(x<<(32-n)); }
+  const K = [0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  let h0=0x6a09e667,h1=0xbb67ae85,h2=0x3c6ef372,h3=0xa54ff53a,
+      h4=0x510e527f,h5=0x9b05688c,h6=0x1f83d9ab,h7=0x5be0cd19;
+  const msg = unescape(encodeURIComponent(str));
+  const bytes = Array.from(msg).map((c) => c.charCodeAt(0));
+  const len = bytes.length;
+  bytes.push(0x80);
+  while ((bytes.length % 64) !== 56) bytes.push(0);
+  const lenBits = len * 8;
+  for (let i=7;i>=0;i--) bytes.push((lenBits/Math.pow(2,i*8)) & 0xff);
+  for (let i=0;i<bytes.length;i+=64) {
+    const w = [];
+    for (let j=0;j<16;j++) w[j]=(bytes[i+j*4]<<24)|(bytes[i+j*4+1]<<16)|(bytes[i+j*4+2]<<8)|bytes[i+j*4+3];
+    for (let j=16;j<64;j++) {
+      const s0 = rr(w[j-15],7)^rr(w[j-15],18)^(w[j-15]>>>3);
+      const s1 = rr(w[j-2],17)^rr(w[j-2],19)^(w[j-2]>>>10);
+      w[j] = (w[j-16]+s0+w[j-7]+s1) >>> 0;
+    }
+    let a=h0,b=h1,c=h2,d=h3,e=h4,f=h5,g=h6,h=h7;
+    for (let j=0;j<64;j++) {
+      const S1 = rr(e,6)^rr(e,11)^rr(e,25);
+      const ch = (e&f)^(~e&g);
+      const t1 = (h+S1+ch+K[j]+w[j]) >>> 0;
+      const S0 = rr(a,2)^rr(a,13)^rr(a,22);
+      const maj = (a&b)^(a&c)^(b&c);
+      const t2 = (S0+maj) >>> 0;
+      h=g; g=f; f=e; e=(d+t1)>>>0; d=c; c=b; b=a; a=(t1+t2)>>>0;
+    }
+    h0=(h0+a)>>>0; h1=(h1+b)>>>0; h2=(h2+c)>>>0; h3=(h3+d)>>>0;
+    h4=(h4+e)>>>0; h5=(h5+f)>>>0; h6=(h6+g)>>>0; h7=(h7+h)>>>0;
+  }
+  return [h0,h1,h2,h3,h4,h5,h6,h7].map((n) => n.toString(16).padStart(8,'0')).join('');
+}
+
+// Where to bounce on success.
+const params = new URLSearchParams(location.search);
+const from = params.get('from') || '/app/';
+
+// Roster fetch — public endpoint.
+async function fetchUsers() {
+  // Surface the real failure mode if the roster fetch breaks, so we
+  // don't silently fall back to "No users configured" when the actual
+  // problem is e.g. a stale service-worker cache or a 5xx. The caller
+  // throws — the boot path catches and renders the error.
+  let res;
+  try {
+    res = await fetch('/api/auth/users', { cache: 'no-store' });
+  } catch (err) {
+    throw new Error(`network: ${err.message || err}`);
+  }
+  if (!res.ok) {
+    let body = '';
+    try { body = (await res.text()).slice(0, 200); } catch {}
+    throw new Error(`HTTP ${res.status}: ${body}`);
+  }
+  let j;
+  try { j = await res.json(); }
+  catch (err) { throw new Error(`bad JSON: ${err.message || err}`); }
+  return j.users || [];
+}
+
+function initials(name) {
+  const parts = String(name).trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+let _selected_user = null;
+let _pin = '';
+
+function renderTiles(users) {
+  const tiles = document.getElementById('bootTiles');
+  tiles.innerHTML = '';
+  // Filter dormant users (no PIN set) — they're still in the roster
+  // for admin tooling, but shouldn't appear as tappable tiles on the
+  // sign-in screen. Same behavior as FRIDAY's tile picker.
+  const active = users.filter((u) => u.has_pin);
+  if (active.length === 0) {
+    showBootError('No active users on this host');
+    return;
+  }
+  for (const u of active) {
+    const tile = document.createElement('button');
+    tile.type = 'button';
+    tile.className = 'boot-tile';
+    tile.dataset.role = u.role || 'user';
+    tile.dataset.userId = u.id;
+    tile.setAttribute('role', 'listitem');
+    tile.innerHTML =
+      `<div class="boot-avatar">${initials(u.display_name)}</div>` +
+      `<div class="boot-tile-name">${u.display_name}</div>`;
+    tile.addEventListener('click', () => {
+      if (!u.has_pin) {
+        // No PIN set on this profile → straight to login w/ empty hash.
+        // verify_pin will reject (pin_hash null), so this is effectively
+        // disabled. We could add a "no-PIN profile" path later.
+        showError(`${u.display_name} has no PIN set`);
+        return;
+      }
+      _selected_user = u;
+      _pin = '';
+      showPinPad();
+    });
+    tiles.appendChild(tile);
+  }
+  tiles.classList.add('visible');
+}
+
+function showPinPad() {
+  document.getElementById('bootPinName').textContent =
+    (_selected_user.display_name || _selected_user.id).toUpperCase();
+  updateDots();
+  document.getElementById('bootPinError').textContent = '';
+  document.getElementById('bootPin').classList.add('visible');
+}
+
+function hidePinPad() {
+  document.getElementById('bootPin').classList.remove('visible');
+  _pin = '';
+  _selected_user = null;
+  updateDots();
+}
+
+function updateDots() {
+  const dots = document.querySelectorAll('#bootPinDots .boot-dot');
+  dots.forEach((dot, i) => {
+    dot.classList.toggle('filled', i < _pin.length);
+    dot.classList.remove('error');
+  });
+}
+
+function showError(msg) {
+  const errorEl = document.getElementById('bootPinError');
+  const dots = document.querySelectorAll('#bootPinDots .boot-dot');
+  const grid = document.getElementById('bootPinGrid');
+  if (errorEl) errorEl.textContent = msg;
+  dots.forEach((d) => d.classList.add('error'));
+  if (grid) {
+    grid.classList.add('boot-shake');
+    setTimeout(() => grid.classList.remove('boot-shake'), 450);
+  }
+  setTimeout(() => {
+    dots.forEach((d) => d.classList.remove('error'));
+    _pin = '';
+    updateDots();
+    if (errorEl) errorEl.textContent = '';
+  }, 1400);
+}
+
+async function attemptPin() {
+  if (!_selected_user) return;
+  let hash;
+  try {
+    hash = sha256(_pin);
+  } catch (err) {
+    // Belt-and-suspenders — the pure-JS sha256 above can't really
+    // fail, but if a future edit reintroduces crypto.subtle this
+    // path is the warning rail so the PIN pad doesn't go dead.
+    console.error('sha256 failed', err);
+    showError('HASH ERROR');
+    return;
+  }
+  let resp;
+  try {
+    resp = await fetch('/api/auth/verify_pin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      // credentials default to same-origin which is what we want for
+      // the Set-Cookie response to land on this origin.
+      body: JSON.stringify({ user_id: _selected_user.id, pin_sha256: hash }),
+    });
+  } catch (err) {
+    console.error('verify_pin fetch failed', err);
+    showError('NETWORK ERROR');
+    return;
+  }
+  if (resp.ok) {
+    // Success — Set-Cookie has landed. Redirect to the original
+    // destination (or /app/ as fallback).
+    location.href = from;
+    return;
+  }
+  if (resp.status === 429) {
+    const j = await resp.json().catch(() => ({}));
+    const secs = j.retry_after_seconds || 60;
+    showError(`LOCKED · TRY IN ${secs}s`);
+    return;
+  }
+  showError('INCORRECT PIN');
+}
+
+function pinPress(digit) {
+  if (_pin.length >= 4) return;
+  _pin += String(digit);
+  updateDots();
+  if (_pin.length === 4) setTimeout(attemptPin, 80);
+}
+function pinBack() {
+  _pin = _pin.slice(0, -1);
+  updateDots();
+}
+
+// Key handlers
+document.getElementById('bootPinGrid').addEventListener('click', (ev) => {
+  const btn = ev.target.closest('.boot-key');
+  if (!btn) return;
+  const digit = btn.dataset.digit;
+  if (digit != null) { pinPress(digit); return; }
+  if (btn.dataset.action === 'back') { pinBack(); return; }
+  if (btn.dataset.action === 'cancel') { hidePinPad(); return; }
+});
+
+document.addEventListener('keydown', (ev) => {
+  const pin_open = document.getElementById('bootPin').classList.contains('visible');
+  if (!pin_open) return;
+  if (/^[0-9]$/.test(ev.key)) { ev.preventDefault(); pinPress(ev.key); return; }
+  if (ev.key === 'Backspace') { ev.preventDefault(); pinBack(); return; }
+  if (ev.key === 'Escape') { ev.preventDefault(); hidePinPad(); return; }
+});
+
+function showBootError(msg) {
+  const tiles = document.getElementById('bootTiles');
+  tiles.innerHTML =
+    '<div style="color:rgba(255,80,80,0.85);font-size:12px;letter-spacing:1px;' +
+    'text-align:center;max-width:520px;line-height:1.6">' +
+    '<div style="opacity:0.6;margin-bottom:6px">SIGN-IN UNAVAILABLE</div>' +
+    '<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;' +
+    'color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.04);padding:8px 12px;' +
+    'border-radius:6px;word-break:break-word">' + msg + '</div>' +
+    '<div style="margin-top:10px;opacity:0.5">Try a hard refresh (Ctrl+Shift+R) — ' +
+    'a stale service-worker cache is a common cause.</div>' +
+    '</div>';
+  tiles.classList.add('visible');
+}
+
+// ── Email + password login + first-login setup ──────────────────────
+// New since 2026-05-25 BACKEND_AUTH_BRIEF: an alternative to the tile +
+// PIN screen, used by admin-created accounts (no PIN yet) and by anyone
+// who prefers email/password. After /auth/login succeeds, if the
+// response carries bootstrap.must_change_password OR .must_set_pin, we
+// route through the setup overlay before redirecting to /app.
+
+function _showEmailOverlay() {
+  document.getElementById('bootOverlay').classList.remove('visible');
+  document.getElementById('bootPin').classList.remove('visible');
+  document.getElementById('bootSetup').classList.remove('visible');
+  const el = document.getElementById('bootEmail');
+  el.classList.add('visible');
+  setTimeout(() => document.getElementById('bootEmailInput').focus(), 60);
+}
+function _hideEmailOverlay() {
+  document.getElementById('bootEmail').classList.remove('visible');
+  document.getElementById('bootOverlay').classList.add('visible');
+}
+function _showSetupOverlay() {
+  document.getElementById('bootEmail').classList.remove('visible');
+  document.getElementById('bootSetup').classList.add('visible');
+}
+
+document.getElementById('bootEmailToggle').addEventListener('click', _showEmailOverlay);
+document.getElementById('bootEmailCancel').addEventListener('click', _hideEmailOverlay);
+
+document.getElementById('bootEmailForm').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const err = document.getElementById('bootEmailError');
+  err.textContent = '';
+  const email = document.getElementById('bootEmailInput').value.trim();
+  const password = document.getElementById('bootEmailPw').value;
+  if (!email || !password) { err.textContent = 'EMAIL + PASSWORD REQUIRED'; return; }
+  let resp;
+  try {
+    resp = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+  } catch (e) {
+    err.textContent = 'NETWORK ERROR'; return;
+  }
+  if (!resp.ok) {
+    err.textContent = resp.status === 401 ? 'INVALID CREDENTIALS' : `ERROR ${resp.status}`;
+    return;
+  }
+  const data = await resp.json().catch(() => ({}));
+  const bootstrap = data.bootstrap || {};
+  if (bootstrap.must_change_password || bootstrap.must_set_pin) {
+    _setupState.must_change_password = !!bootstrap.must_change_password;
+    _setupState.must_set_pin = !!bootstrap.must_set_pin;
+    _renderSetupPhase();
+    _showSetupOverlay();
+    return;
+  }
+  // No bootstrap needed — straight to the app.
+  location.href = from;
+});
+
+// Two-phase setup state. Phase 1: change_password (if required). Phase
+// 2: set_pin (if required). Either can run independently.
+const _setupState = { must_change_password: false, must_set_pin: false };
+
+function _renderSetupPhase() {
+  const pwForm = document.getElementById('bootSetupPasswordForm');
+  const pinForm = document.getElementById('bootSetupPinForm');
+  const title = document.getElementById('bootSetupTitle');
+  const subtitle = document.getElementById('bootSetupSubtitle');
+  if (_setupState.must_change_password) {
+    title.textContent = 'SET A NEW PASSWORD';
+    subtitle.textContent = "Your account was issued with a temporary password. Choose a new one to continue.";
+    pwForm.style.display = '';
+    pinForm.style.display = 'none';
+    setTimeout(() => document.getElementById('bootSetupNewPw').focus(), 60);
+    return;
+  }
+  if (_setupState.must_set_pin) {
+    title.textContent = 'SET A PIN';
+    subtitle.textContent = "Pick a 4-digit PIN. You'll use it to confirm high-risk actions like spending money.";
+    pwForm.style.display = 'none';
+    pinForm.style.display = '';
+    setTimeout(() => document.getElementById('bootSetupNewPin').focus(), 60);
+    return;
+  }
+  // No more phases — bounce to app.
+  location.href = from;
+}
+
+document.getElementById('bootSetupPasswordForm').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const err = document.getElementById('bootSetupError');
+  err.textContent = '';
+  const a = document.getElementById('bootSetupNewPw').value;
+  const b = document.getElementById('bootSetupConfirmPw').value;
+  if (a.length < 10) { err.textContent = 'PASSWORD MUST BE AT LEAST 10 CHARACTERS'; return; }
+  if (a !== b) { err.textContent = 'PASSWORDS DON\'T MATCH'; return; }
+  let resp;
+  try {
+    resp = await fetch('/api/auth/change_password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ new_password: a }),
+    });
+  } catch { err.textContent = 'NETWORK ERROR'; return; }
+  if (!resp.ok) {
+    const j = await resp.json().catch(() => ({}));
+    err.textContent = (j.error || `ERROR ${resp.status}`).toUpperCase();
+    return;
+  }
+  _setupState.must_change_password = false;
+  _renderSetupPhase();
+});
+
+document.getElementById('bootSetupPinForm').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const err = document.getElementById('bootSetupError');
+  err.textContent = '';
+  const a = document.getElementById('bootSetupNewPin').value;
+  const b = document.getElementById('bootSetupConfirmPin').value;
+  if (!/^\d{4,8}$/.test(a)) { err.textContent = 'PIN MUST BE 4-8 DIGITS'; return; }
+  if (a !== b) { err.textContent = 'PINS DON\'T MATCH'; return; }
+  const hash = sha256(a);
+  let resp;
+  try {
+    resp = await fetch('/api/auth/set_pin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin_sha256: hash }),
+    });
+  } catch { err.textContent = 'NETWORK ERROR'; return; }
+  if (!resp.ok) {
+    const j = await resp.json().catch(() => ({}));
+    err.textContent = (j.error || `ERROR ${resp.status}`).toUpperCase();
+    return;
+  }
+  _setupState.must_set_pin = false;
+  _renderSetupPhase();
+});
+
+// Unregister any prior service worker on the login page so a stale
+// pre-multi-user shell can't intercept this page's fetches. The main
+// /app/ shell re-registers it on next load.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((regs) => {
+    for (const r of regs) r.unregister();
+  }).catch(() => {});
+}
+
+// Boot the page.
+(async () => {
+  // If already signed in, jump straight to the destination.
+  try {
+    const me = await fetch('/api/auth/me', { cache: 'no-store' });
+    if (me.ok) { location.href = from; return; }
+  } catch { /* offline — continue to tiles */ }
+  let users;
+  try {
+    users = await fetchUsers();
+  } catch (err) {
+    showBootError(String(err.message || err));
+    return;
+  }
+  if (!users.length) {
+    showBootError('No users configured in users.yaml');
+    return;
+  }
+  renderTiles(users);
+})();
+</script>
+</body>
+</html>

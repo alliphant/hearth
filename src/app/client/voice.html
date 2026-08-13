@@ -1,0 +1,935 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>Kate — Voice</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<style>
+  /* ── Gilded-glass voice experience ───────────────────────────────────── */
+  :root {
+    --bg0: #07060a;
+    --bg1: #0c0904;
+    --gold: #e6b864;
+    --gold-deep: #c89337;
+    --ember: #ef9a5a;
+    --ink: #f3e9d6;
+    --ink-dim: #b7a98c;
+    --glass: rgba(28, 22, 14, 0.42);
+    --glass-edge: rgba(230, 184, 100, 0.18);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body {
+    background:
+      radial-gradient(120% 90% at 50% 18%, #1a1305 0%, var(--bg1) 42%, var(--bg0) 100%);
+    color: var(--ink);
+    font: 400 16px/1.5 -apple-system, "SF Pro Text", "Inter", system-ui, sans-serif;
+    letter-spacing: 0.01em;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+  }
+  /* film grain */
+  body::after {
+    content: ""; position: fixed; inset: -50%; pointer-events: none; z-index: 6;
+    opacity: 0.05; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    animation: grain 6s steps(6) infinite;
+  }
+  @keyframes grain { 0%{transform:translate(0,0)} 20%{transform:translate(-4%,3%)} 40%{transform:translate(3%,-2%)} 60%{transform:translate(-2%,4%)} 80%{transform:translate(4%,2%)} 100%{transform:translate(0,0)} }
+
+  .stage { position: fixed; inset: 0; display: grid; grid-template-rows: auto 1fr auto; z-index: 2; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: max(18px, env(safe-area-inset-top)) 22px 8px;
+  }
+  .brand { display: flex; align-items: center; gap: 11px; }
+  .brand .dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--gold); box-shadow: 0 0 12px var(--gold);
+    animation: breath 3.4s ease-in-out infinite;
+  }
+  @keyframes breath { 0%,100%{opacity:.5;transform:scale(.85)} 50%{opacity:1;transform:scale(1.15)} }
+  .brand b { font-weight: 600; letter-spacing: .04em; }
+  .brand small { color: var(--ink-dim); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; }
+  .x {
+    appearance: none; border: 1px solid var(--glass-edge); background: var(--glass);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    color: var(--ink-dim); width: 38px; height: 38px; border-radius: 50%;
+    font-size: 16px; cursor: pointer; transition: .2s; line-height: 1;
+  }
+  .x:hover { color: var(--ink); border-color: var(--gold); }
+
+  /* ── Orb ─────────────────────────────────────────────────────────────── */
+  .orbwrap { position: relative; display: grid; place-items: center; }
+  #orb { width: min(74vw, 460px); height: min(74vw, 460px); display: block; }
+  .halo {
+    position: absolute; width: 80%; aspect-ratio: 1; border-radius: 50%;
+    background: radial-gradient(circle, rgba(230,184,100,.20), transparent 62%);
+    filter: blur(26px); pointer-events: none; transition: opacity .6s;
+  }
+
+  /* ── Caption / teleprompter transcript ───────────────────────────────── */
+  .caption {
+    margin: 0 auto; width: min(720px, 92vw);
+    padding: 6px 18px 14px; text-align: center;
+  }
+  .you {
+    color: var(--ink-dim); font-size: 14px; letter-spacing: .02em;
+    min-height: 20px; margin-bottom: 6px; transition: opacity .4s;
+  }
+  .you span { color: var(--gold); }
+  .you.dim { opacity: .32; }
+  /* The prompter viewport: FIXED height so a long reply never floods the
+     screen — it scrolls within, teleprompter-style, and the top/bottom edges
+     fade so lines dissolve in and out. */
+  .prompter {
+    position: relative; height: clamp(112px, 30vh, 260px); overflow: hidden;
+    -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 24%, #000 74%, transparent 100%);
+            mask-image: linear-gradient(180deg, transparent 0%, #000 24%, #000 74%, transparent 100%);
+  }
+  .prompter-inner {
+    will-change: transform;
+    font-size: clamp(19px, 2.7vw, 25px); line-height: 1.5; color: var(--ink);
+    font-weight: 430; text-wrap: pretty;
+  }
+  /* Karaoke word states: upcoming (dim) → now (gold glow) → spoken (bright). */
+  .prompter-inner .w {
+    color: var(--ink-dim); opacity: .40;
+    transition: color .26s ease, opacity .26s ease, text-shadow .26s ease;
+  }
+  .prompter-inner .w.spoken { color: var(--ink); opacity: .92; }
+  .prompter-inner .w.now {
+    color: var(--gold); opacity: 1;
+    text-shadow: 0 0 18px rgba(230,184,100,.55), 0 1px 20px rgba(0,0,0,.5);
+  }
+  .prompter-inner .cursor { display:inline-block; width:.5ch; color: var(--gold); animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50%{opacity:0} }
+
+  /* ── Bottom controls ─────────────────────────────────────────────────── */
+  footer { display: grid; place-items: center; gap: 14px; padding: 6px 0 max(26px, env(safe-area-inset-bottom)); }
+  .status {
+    display: inline-flex; align-items: center; gap: 9px;
+    color: var(--ink-dim); font-size: 12.5px; letter-spacing: .16em; text-transform: uppercase;
+    transition: color .3s;
+  }
+  .status .pip { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-dim); transition: .3s; }
+  .status[data-s="listening"] { color: var(--gold); } .status[data-s="listening"] .pip { background: var(--gold); box-shadow: 0 0 10px var(--gold); animation: breath 1.4s ease-in-out infinite; }
+  .status[data-s="thinking"]  { color: var(--ember); } .status[data-s="thinking"]  .pip { background: var(--ember); animation: breath .9s ease-in-out infinite; }
+  .status[data-s="speaking"]  { color: var(--gold); }  .status[data-s="speaking"]  .pip { background: var(--gold); box-shadow: 0 0 12px var(--gold); }
+  .controls { display: flex; gap: 14px; }
+  .btn {
+    appearance: none; cursor: pointer; border-radius: 999px;
+    border: 1px solid var(--glass-edge); background: var(--glass);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    color: var(--ink); padding: 11px 20px; font-size: 14px; letter-spacing: .02em;
+    transition: .2s; display: inline-flex; align-items: center; gap: 8px;
+  }
+  .btn:hover { border-color: var(--gold); }
+  .btn.muted { color: var(--ink-dim); opacity: .8; }
+
+  /* ── Start gate (mic permission needs a user gesture) ────────────────── */
+  .gate {
+    position: fixed; inset: 0; z-index: 10; display: grid; place-items: center;
+    background: radial-gradient(120% 90% at 50% 30%, #1a1305 0%, var(--bg0) 100%);
+    text-align: center; padding: 24px;
+  }
+  .gate.hide { opacity: 0; pointer-events: none; transition: opacity .7s; }
+  .gate h1 { font-weight: 300; font-size: clamp(26px, 6vw, 40px); margin: 0 0 4px; letter-spacing: .01em; }
+  .gate h1 b { font-weight: 600; color: var(--gold); }
+  .gate p { color: var(--ink-dim); margin: 0 0 30px; }
+  .gate .enter {
+    cursor: pointer; border: 1px solid var(--gold); border-radius: 999px;
+    background: linear-gradient(180deg, rgba(230,184,100,.16), rgba(230,184,100,.05));
+    color: var(--gold); font-size: 16px; letter-spacing: .03em; padding: 15px 38px;
+    box-shadow: 0 0 0 0 rgba(230,184,100,.5); animation: pulse 2.6s ease-out infinite;
+  }
+  @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(230,184,100,.35)} 70%{box-shadow:0 0 0 22px rgba(230,184,100,0)} 100%{box-shadow:0 0 0 0 rgba(230,184,100,0)} }
+  .err { color: #e88; font-size: 13px; margin-top: 18px; min-height: 18px; }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <header>
+      <div class="brand"><span class="dot"></span><div><b>Kate</b> &nbsp;<small>chief of staff</small></div></div>
+      <button class="x" id="close" title="End">✕</button>
+    </header>
+    <div class="orbwrap">
+      <div class="halo" id="halo"></div>
+      <canvas id="orb" width="920" height="920"></canvas>
+    </div>
+    <div>
+      <div class="caption">
+        <div class="you" id="you"></div>
+        <div class="prompter" id="prompter"><div class="prompter-inner" id="prompterInner"></div></div>
+      </div>
+      <footer>
+        <div class="status" id="status" data-s="idle"><span class="pip"></span><span id="statusText">connecting</span></div>
+        <div class="controls">
+          <button class="btn" id="mute">🎙 <span>Mute mic</span></button>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <div class="gate" id="gate">
+    <div>
+      <h1>Talk to <b>Kate</b></h1>
+      <p>Hands-free. Just speak — she's listening.</p>
+      <button class="enter" id="enter">Begin</button>
+      <div class="err" id="err"></div>
+    </div>
+  </div>
+
+<script type="module">
+  // The pure turn policy (endpointing budgets + barge-in gates) — a COMMITTED
+  // module (voice/turn_engine.js, `bun run smoke:web-voice-engine`), port of
+  // the native client's unit-tested HearthVoiceCore engine. Module scripts
+  // are deferred, so this lands on window well before the Begin click, which
+  // is the first moment the classic main script below reads it.
+  import * as HearthVoiceEngine from './voice/turn_engine.js';
+  window.HearthVoiceEngine = HearthVoiceEngine;
+</script>
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const els = {
+    gate: $('gate'), enter: $('enter'), err: $('err'),
+    orb: $('orb'), halo: $('halo'), you: $('you'),
+    prompter: $('prompter'), prompterInner: $('prompterInner'),
+    status: $('status'), statusText: $('statusText'), mute: $('mute'), close: $('close'),
+  };
+
+  // ── State ──────────────────────────────────────────────────────────────
+  let state = 'idle';        // idle | listening | thinking | speaking
+  let muted = false;
+  let level = 0;             // smoothed current amplitude 0..1 driving the orb
+  let micMuted = false;
+
+  // Full-duplex runtime (Silero VAD + barge-in). Non-null once the vendored
+  // VAD assets loaded (voice/fetch-vad-web-assets.sh); null → the legacy
+  // energy-gate, turn-based loop below runs unchanged (no barge-in).
+  let fd = null;             // { micVAD, engine } | null
+  let convId = null;         // Hearth conversation id (from chatcmpl-<id>) — sticky
+  let chatAbort = null;      // AbortController for the in-flight shim SSE
+
+  const STATUS = { idle: 'ready', listening: 'listening', thinking: 'thinking', speaking: 'speaking' };
+  function setState(s) {
+    state = s;
+    els.status.dataset.s = s;
+    els.statusText.textContent = STATUS[s] || s;
+    els.halo.style.opacity = (s === 'idle') ? '0.5' : '1';
+  }
+
+  // ── Audio graph ─────────────────────────────────────────────────────────
+  let ac, micAnalyser, micData, ttsAnalyser, ttsData, ttsGain;
+  let micStream;
+
+  async function initAudio() {
+    // The mic (getUserMedia) is only exposed on SECURE origins — https:// or
+    // localhost. On a plain http:// origin Chromium leaves navigator.mediaDevices
+    // undefined, which otherwise throws a cryptic "cannot read 'getUserMedia'".
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      throw new Error(
+        !window.isSecureContext
+          ? 'Microphone needs a secure connection — open this page over HTTPS (e.g. https://your-llm-host.local/app/voice.html), not http://.'
+          : 'This browser can’t capture audio (getUserMedia unavailable). Use Chrome/Chromium.'
+      );
+    }
+    // Run the graph at the TTS sample rate (24 kHz) so streamed PCM chunks abut
+    // sample-exactly with no per-buffer resampling → no boundary clicks. Falls
+    // back to the default rate if a browser rejects the explicit rate.
+    try { ac = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 }); }
+    catch (_) { ac = new (window.AudioContext || window.webkitAudioContext)(); }
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
+    const src = ac.createMediaStreamSource(micStream);
+    micAnalyser = ac.createAnalyser(); micAnalyser.fftSize = 512; micAnalyser.smoothingTimeConstant = 0.8;
+    micData = new Uint8Array(micAnalyser.frequencyBinCount);
+    src.connect(micAnalyser);
+    ttsAnalyser = ac.createAnalyser(); ttsAnalyser.fftSize = 512; ttsAnalyser.smoothingTimeConstant = 0.82;
+    ttsData = new Uint8Array(ttsAnalyser.frequencyBinCount);
+    ttsAnalyser.connect(ac.destination);
+    // Scheduled PCM chunks connect INTO the gain (barge-in fades it over
+    // ~80 ms instead of clipping Kate mid-phoneme); gain → analyser → out.
+    ttsGain = ac.createGain();
+    ttsGain.connect(ttsAnalyser);
+  }
+
+  function rms(analyser, data) {
+    if (!analyser) return 0;
+    analyser.getByteTimeDomainData(data);
+    let s = 0;
+    for (let i = 0; i < data.length; i++) { const v = (data[i] - 128) / 128; s += v * v; }
+    return Math.sqrt(s / data.length); // ~0..0.5
+  }
+
+  // ── Orb render ──────────────────────────────────────────────────────────
+  const ctx = els.orb.getContext('2d');
+  const W = els.orb.width, H = els.orb.height, CX = W / 2, CY = H / 2;
+  const N_PARTS = 84;
+  const parts = Array.from({ length: N_PARTS }, (_, i) => ({
+    a: (i / N_PARTS) * Math.PI * 2, r: 0.5 + Math.random() * 0.5, sp: 0.15 + Math.random() * 0.5, ph: Math.random() * 6.28,
+  }));
+  let t = 0;
+  function draw() {
+    t += 0.016;
+    // target amplitude from whichever source is active
+    let target = 0;
+    if (state === 'speaking') target = rms(ttsAnalyser, ttsData) * 2.6;
+    else if (state === 'listening' && !micMuted) target = rms(micAnalyser, micData) * 2.4;
+    else if (state === 'thinking') target = 0.18 + Math.sin(t * 3) * 0.05;
+    else target = 0.06 + Math.sin(t * 1.1) * 0.03; // idle breath
+    level += (Math.min(1, target) - level) * 0.18;
+
+    ctx.clearRect(0, 0, W, H);
+    const base = W * 0.20;
+    const R = base * (1 + level * 0.55);
+    const hot = state === 'thinking' ? '#ef9a5a' : '#e6b864';
+
+    // outer glow
+    const g0 = ctx.createRadialGradient(CX, CY, R * 0.2, CX, CY, R * (2.0 + level));
+    g0.addColorStop(0, 'rgba(230,184,100,' + (0.22 + level * 0.4) + ')');
+    g0.addColorStop(0.5, 'rgba(200,147,55,' + (0.08 + level * 0.18) + ')');
+    g0.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g0; ctx.fillRect(0, 0, W, H);
+
+    // reactive rings
+    for (let k = 0; k < 3; k++) {
+      const rr = R * (1.15 + k * 0.28) + Math.sin(t * (1.2 + k) + k) * (6 + level * 60);
+      ctx.beginPath();
+      ctx.strokeStyle = 'rgba(230,184,100,' + (0.16 - k * 0.04 + level * 0.22) + ')';
+      ctx.lineWidth = 1.4;
+      for (let i = 0; i <= 80; i++) {
+        const a = (i / 80) * Math.PI * 2;
+        const wob = 1 + Math.sin(a * (3 + k) + t * 2) * (0.02 + level * 0.10);
+        const x = CX + Math.cos(a) * rr * wob, y = CY + Math.sin(a) * rr * wob;
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.closePath(); ctx.stroke();
+    }
+
+    // particles orbiting
+    for (const p of parts) {
+      const orbit = R * (1.05 + p.r * (0.5 + level * 0.7));
+      const a = p.a + t * p.sp * (state === 'thinking' ? 2.4 : 1);
+      const pr = orbit + Math.sin(t * 2 + p.ph) * (4 + level * 30);
+      const x = CX + Math.cos(a) * pr, y = CY + Math.sin(a) * pr;
+      const sz = 1.1 + level * 2.2 + (Math.sin(t * 3 + p.ph) + 1) * 0.6;
+      ctx.beginPath(); ctx.arc(x, y, sz, 0, 6.2832);
+      ctx.fillStyle = 'rgba(243,233,214,' + (0.10 + level * 0.5) + ')'; ctx.fill();
+    }
+
+    // core
+    const g1 = ctx.createRadialGradient(CX, CY - R * 0.18, R * 0.05, CX, CY, R);
+    g1.addColorStop(0, '#fff4df');
+    g1.addColorStop(0.18, hot);
+    g1.addColorStop(0.7, '#9a6c22');
+    g1.addColorStop(1, 'rgba(60,38,8,0.35)');
+    ctx.beginPath(); ctx.arc(CX, CY, R, 0, 6.2832); ctx.fillStyle = g1; ctx.fill();
+    // inner shimmer
+    ctx.beginPath(); ctx.arc(CX, CY, R * (0.5 + level * 0.3), 0, 6.2832);
+    ctx.fillStyle = 'rgba(255,244,223,' + (0.10 + level * 0.35) + ')'; ctx.fill();
+
+    // teleprompter: advance the karaoke word + glide the scroll on the same rAF
+    if (karaokeOn) updateKaraoke();
+    applyScroll();
+
+    requestAnimationFrame(draw);
+  }
+
+  // ── STT — our HOSTED whisper, every browser ───────────────────────────────
+  // We run our own speaches/whisper STT (relay → /app/api/transcribe), so voice
+  // NEVER touches the browser's Web Speech API (Google's cloud on Chrome, absent
+  // on Firefox, flaky on Safari).
+  //
+  // This MediaRecorder block is the LEGACY fallback loop — energy-gate
+  // endpointing (~1.1 s trailing silence), turn-based, no barge-in. It runs
+  // only when the full-duplex VAD runtime below failed to arm (vendored
+  // assets not fetched / ancient browser), preserving the pre-barge behavior
+  // exactly.
+  let wantListen = false;
+  let mr = null, mrChunks = [], vadTimer = null, mrSpoke = false, mrLastVoice = 0, mrStart = 0;
+  const VAD_ON = 0.035, VAD_OFF = 0.02, SILENCE_MS = 1100, MAX_UTTER_MS = 15000, MIN_UTTER_MS = 350;
+  function pickRecMime() {
+    for (const m of ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/webm', 'audio/mp4']) {
+      try { if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m; } catch (_) {}
+    }
+    return '';
+  }
+  function startServerListening() {
+    if (muted || !micStream || (mr && mr.state === 'recording')) return;
+    mrChunks = []; mrSpoke = false; mrLastVoice = 0; mrStart = Date.now();
+    const mime = pickRecMime();
+    try { mr = mime ? new MediaRecorder(micStream, { mimeType: mime }) : new MediaRecorder(micStream); }
+    catch (_) { try { mr = new MediaRecorder(micStream); } catch (e) { showErr('Recording unavailable.'); return; } }
+    mr.addEventListener('dataavailable', (e) => { if (e.data && e.data.size) mrChunks.push(e.data); });
+    mr.addEventListener('stop', onServerRecStop);
+    try { mr.start(); } catch (_) { return; }
+    setState('listening'); micMuted = false;
+    vadTimer = setInterval(() => {
+      if (!mr || mr.state !== 'recording') return;
+      const lvl = rms(micAnalyser, micData), now = Date.now();
+      if (lvl > VAD_ON) { mrSpoke = true; mrLastVoice = now; }
+      const dur = now - mrStart;
+      const ended = (mrSpoke && lvl < VAD_OFF && now - mrLastVoice > SILENCE_MS) || dur > MAX_UTTER_MS;
+      if (ended && dur > MIN_UTTER_MS) stopServerRec();
+    }, 80);
+  }
+  function stopServerRec() {
+    if (vadTimer) { clearInterval(vadTimer); vadTimer = null; }
+    if (mr && mr.state === 'recording') { try { mr.stop(); } catch (_) {} }
+  }
+  async function onServerRecStop() {
+    const spoke = mrSpoke, type = (mr && mr.mimeType) || pickRecMime() || 'audio/webm';
+    mr = null;
+    const blob = new Blob(mrChunks, { type }); mrChunks = [];
+    const relisten = () => { if (wantListen && !muted) startServerListening(); };
+    if (!spoke || blob.size < 1200) { relisten(); return; }
+    setState('thinking'); micMuted = true;
+    try {
+      const ext = type.includes('ogg') ? 'ogg' : type.includes('mp4') ? 'mp4' : 'webm';
+      const fd = new FormData(); fd.append('file', blob, 'mic.' + ext);
+      const r = await fetch('/app/api/transcribe', { method: 'POST', credentials: 'include', body: fd });
+      const j = await r.json().catch(() => ({}));
+      const text = (j.transcript || '').trim();
+      if (text) sendToKate(text); else relisten();
+    } catch (_) { relisten(); }
+  }
+
+  function startListening() {
+    if (muted) return;
+    wantListen = true;
+    startServerListening();
+  }
+  function stopListening() {
+    wantListen = false;
+    stopServerRec();
+  }
+  /** Turn-boundary re-listen — full-duplex when armed, legacy otherwise. */
+  function resumeListening(seededFromBarge) {
+    if (fd) fdBeginListening(!!seededFromBarge);
+    else startListening();
+  }
+
+  // ── Full-duplex: Silero VAD endpointing + barge-in ─────────────────────────
+  // The upgrade path (mirrors the native client): the echo-cancelled mic stays
+  // HOT through Kate's playback, a real VAD (Silero v5 via vad-web, 32 ms
+  // frames) replaces the energy gate, and the pure turn engine decides
+  // endpoint/barge. Utterance audio is captured as raw 16 kHz frames straight
+  // from the VAD pipeline and shipped to whisper as WAV — no MediaRecorder, no
+  // codec roulette, and the pre-roll ring means the words that TRIGGERED a
+  // barge land in the transcript. Assets are fetched at deploy
+  // (voice/fetch-vad-web-assets.sh); missing assets → fd stays null → the
+  // legacy loop above runs exactly as before.
+  const FRAME_S = 512 / 16000; // 32 ms Silero v5 frames
+  const PREROLL_SAMPLES = Math.round(0.6 * 16000);
+  let fdListening = false;
+  let preroll = [];            // rolling Float32Array frames, ≤ PREROLL_SAMPLES
+  let prerollSamples = 0;
+  let utterFrames = [];        // the current listening window's frames
+  let transcribing = false;
+
+  function loadScriptOnce(src) {
+    return new Promise((resolveP, rejectP) => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = () => resolveP();
+      s.onerror = () => rejectP(new Error('missing ' + src));
+      document.head.appendChild(s);
+    });
+  }
+
+  async function initFullDuplex() {
+    const E = window.HearthVoiceEngine;
+    if (!E) return null;
+    try {
+      // Order matters: the vad-web UMD bundle grabs the global `ort` at load.
+      await loadScriptOnce('voice/vendor/ort.min.js');
+      await loadScriptOnce('voice/vendor/vad-web.bundle.min.js');
+      if (!window.vad || !window.ort) return null;
+      const engine = new E.VoiceTurnEngine({ bargeCapable: true });
+      const micVAD = await window.vad.MicVAD.new({
+        model: 'v5',
+        baseAssetPath: '/app/voice/vendor/',
+        onnxWASMBasePath: '/app/voice/vendor/',
+        getStream: async () => micStream,   // reuse the echo-cancelled mic
+        startOnLoad: false,
+        onFrameProcessed: (probs, frame) => handleVadFrame(probs, frame),
+        onSpeechStart: () => {}, onSpeechRealStart: () => {},
+        onSpeechEnd: () => {}, onVADMisfire: () => {},
+      });
+      await micVAD.start();
+      console.info('[voice] full-duplex armed (Silero VAD + barge-in)');
+      return { micVAD, engine };
+    } catch (e) {
+      console.info('[voice] VAD runtime unavailable — legacy turn-based loop:', e && e.message);
+      return null;
+    }
+  }
+
+  function frameRMS(f) {
+    let s = 0;
+    for (let i = 0; i < f.length; i++) s += f[i] * f[i];
+    return Math.sqrt(s / f.length);
+  }
+
+  function handleVadFrame(probs, frame) {
+    if (!fd || muted) return;
+    // Rolling pre-roll ring (always, in every phase).
+    preroll.push(frame); prerollSamples += frame.length;
+    while (prerollSamples > PREROLL_SAMPLES && preroll.length > 1) {
+      prerollSamples -= preroll.shift().length;
+    }
+    if (fdListening) utterFrames.push(frame);
+    const action = fd.engine.vadHop(probs.isSpeech, frameRMS(frame), FRAME_S);
+    if (action) performAction(action);
+  }
+
+  function performAction(action) {
+    const A = window.HearthVoiceEngine.Action;
+    if (action === A.ENDPOINT) endpointUtterance();
+    else if (action === A.RESTART_LISTENING) fdBeginListening(false);
+    else if (action === A.BARGE_INTO_SPEAKING) bargeIntoSpeaking();
+    else if (action === A.BARGE_INTO_THINKING) bargeIntoThinking();
+  }
+
+  function fdBeginListening(seededFromBarge) {
+    if (!fd || muted) return;
+    // The barge words already happened — seed the window from the pre-roll
+    // ring so the utterance opens with them, not mid-sentence.
+    utterFrames = seededFromBarge ? preroll.slice() : [];
+    fdListening = true;
+    micMuted = false;
+    setState('listening');
+    fd.engine.listenStarted(seededFromBarge);
+  }
+
+  async function endpointUtterance() {
+    if (!fd || transcribing) return;
+    fdListening = false;
+    const frames = utterFrames; utterFrames = [];
+    setState('thinking'); micMuted = true;
+    // The engine is parked idle while whisper runs — a fresh utterance in
+    // this short gap re-opens with the next listening window. (thinkStarted
+    // fires in sendToKate, once there IS a turn to barge.)
+    transcribing = true;
+    try {
+      const fdBody = new FormData();
+      fdBody.append('file', encodeWav16k(frames), 'mic.wav');
+      const r = await fetch('/app/api/transcribe', { method: 'POST', credentials: 'include', body: fdBody });
+      const j = await r.json().catch(() => ({}));
+      const text = (j.transcript || '').trim();
+      transcribing = false;
+      if (text) sendToKate(text);
+      else fdBeginListening(false);
+    } catch (_) {
+      transcribing = false;
+      fdBeginListening(false);
+    }
+  }
+
+  /** Raw 16 kHz mono Float32 frames → 16-bit PCM WAV (whisper's native diet). */
+  function encodeWav16k(frames) {
+    let n = 0;
+    for (const f of frames) n += f.length;
+    const buf = new ArrayBuffer(44 + n * 2);
+    const v = new DataView(buf);
+    const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVE');
+    str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, 16000, true); v.setUint32(28, 16000 * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    str(36, 'data'); v.setUint32(40, n * 2, true);
+    let o = 44;
+    for (const f of frames) {
+      for (let i = 0; i < f.length; i++) {
+        const s = Math.max(-1, Math.min(1, f[i]));
+        v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+        o += 2;
+      }
+    }
+    return new Blob([buf], { type: 'audio/wav' });
+  }
+
+  function bargeIntoSpeaking() {
+    console.info('[voice] barge-in: interrupting playback');
+    // Fade Kate out (~80 ms) then hard-stop; the gen bump kills the PCM
+    // reader loop and orphans any still-scheduled chunks.
+    const gen = ++ttsGen;
+    try {
+      const now = ac.currentTime;
+      ttsGain.gain.setValueAtTime(ttsGain.gain.value, now);
+      ttsGain.gain.linearRampToValueAtTime(0.0001, now + 0.08);
+    } catch (_) {}
+    setTimeout(() => {
+      if (gen !== ttsGen) return; // a newer turn already took the graph
+      stopAllTts();
+      try { ttsGain.gain.cancelScheduledValues(0); ttsGain.gain.value = 1; } catch (_) {}
+    }, 110);
+    freezeKaraoke(); // spoken words stay lit; the unsaid remainder stays dim
+    fdBeginListening(true);
+  }
+
+  function bargeIntoThinking() {
+    console.info('[voice] barge-in: cancelling pending turn');
+    ++ttsGen;                       // orphan the turn (its SSE + any TTS)
+    try { chatAbort?.abort(); } catch (_) {}
+    fireCancelTurn();
+    fdBeginListening(true);
+  }
+
+  // Abort the in-flight turn server-side. Dropping the shim SSE alone does
+  // NOT do this — the shim runs the turn decoupled from the response; only
+  // POST /api/conversations/:id/cancel aborts it (idempotent — a late/extra
+  // call no-ops with {cancelled:false}; the id is sticky per reused voice
+  // conversation, so a barge landing before this turn's first chunk can
+  // still cancel via the id learned on an earlier turn).
+  function fireCancelTurn() {
+    if (!convId) return;
+    fetch('/api/conversations/' + encodeURIComponent(convId) + '/cancel', {
+      method: 'POST', credentials: 'include', keepalive: true,
+    }).catch(() => {});
+  }
+
+  // ── Teleprompter + karaoke (client-side timing estimate, no alignment) ────
+  // Kate's reply renders as word spans inside a fixed-height prompter that
+  // scrolls as she speaks (so a long reply never floods the screen); the word
+  // being spoken lights gold, CapCut-style. There is NO per-word TTS alignment:
+  // the whole reply's audio duration is known (playCursor − audioStart) and each
+  // word gets a slice proportional to its length (+ a breath at sentence ends).
+  // The reply text fully streams as text BEFORE audio begins, so the word list
+  // is complete when the highlight sweep starts.
+  let kSpans = [];        // word <span>s, in order
+  let kEndFlag = [];      // true if the word ends a sentence (carries a breath)
+  let kStartFrac = [];    // cumulative fraction (0..1) at each word's START
+  let hlIdx = -1;         // highest highlighted word index (forward-only)
+  let audioStart = 0, audioStartSet = false, audioDur = 0, karaokeOn = false;
+  let scrollY = 0, scrollTarget = 0, cursorEl = null;
+
+  function padPrompter() {
+    const h = els.prompter.clientHeight || 180;
+    const pad = Math.round(h * 0.42);
+    els.prompterInner.style.paddingTop = pad + 'px';
+    els.prompterInner.style.paddingBottom = pad + 'px';
+  }
+  function resetPrompter() {
+    els.prompterInner.innerHTML = '';
+    kSpans = []; kEndFlag = []; kStartFrac = []; hlIdx = -1;
+    audioStart = 0; audioStartSet = false; audioDur = 0; karaokeOn = false;
+    scrollY = 0; scrollTarget = 0; cursorEl = null;
+    els.prompterInner.style.transform = 'translateY(0px)';
+    padPrompter();
+  }
+  function appendWords(text) {
+    for (const w of String(text || '').split(/\s+/)) {
+      if (!w) continue;
+      const sp = document.createElement('span');
+      sp.className = 'w'; sp.textContent = w;      // textContent — safe, no escaping
+      els.prompterInner.appendChild(sp);
+      els.prompterInner.appendChild(document.createTextNode(' '));
+      kSpans.push(sp); kEndFlag.push(false);
+    }
+    if (kEndFlag.length) kEndFlag[kEndFlag.length - 1] = true; // sentence ends here
+  }
+  function showCursor(on) {
+    if (on) {
+      if (!cursorEl) { cursorEl = document.createElement('span'); cursorEl.className = 'cursor'; cursorEl.textContent = '▍'; }
+      els.prompterInner.appendChild(cursorEl); // appendChild MOVES it to the end
+    } else if (cursorEl) { cursorEl.remove(); cursorEl = null; }
+  }
+  function showFallbackText(text) {
+    resetPrompter();
+    appendWords(text);
+    for (const s of kSpans) s.classList.add('spoken');
+    requestAnimationFrame(() => scrollToWord(Math.floor(kSpans.length / 2)));
+  }
+  // Char-weighted cumulative start fraction per word (a breath at sentence
+  // ends). Computed once when the full word list exists — pure math, no layout
+  // read, so it's immune to a transient layout at call time.
+  function finalizeKaraokeWords() {
+    const n = kSpans.length; if (!n) return;
+    const GAP = 3, BASE = 1.4; // breath at sentence ends; per-word floor
+    const wt = new Array(n); let total = 0;
+    for (let i = 0; i < n; i++) {
+      const len = (kSpans[i].textContent || '').replace(/[^\w']/g, '').length || 1;
+      wt[i] = BASE + len + (kEndFlag[i] ? GAP : 0); total += wt[i];
+    }
+    kStartFrac = new Array(n); let cum = 0;
+    for (let i = 0; i < n; i++) { kStartFrac[i] = cum / total; cum += wt[i]; }
+  }
+  function updateKaraoke() {
+    if (!ac || !audioStartSet || !kStartFrac.length) return;
+    const dur = audioDur > 0 ? audioDur : Math.max(0.6, playCursor - audioStart);
+    const elapsed = ac.currentTime - audioStart;
+    const frac = Math.max(0, Math.min(1, dur > 0 ? elapsed / dur : 0));
+    let idx = hlIdx < 0 ? 0 : hlIdx;
+    while (idx + 1 < kStartFrac.length && kStartFrac[idx + 1] <= frac) idx++;
+    if (idx !== hlIdx) {
+      if (hlIdx < 0) for (let j = 0; j < idx; j++) kSpans[j] && kSpans[j].classList.add('spoken');
+      for (let j = Math.max(0, hlIdx); j < idx; j++) { const s = kSpans[j]; if (s) { s.classList.remove('now'); s.classList.add('spoken'); } }
+      const cur = kSpans[idx]; if (cur) { cur.classList.remove('spoken'); cur.classList.add('now'); }
+      hlIdx = idx;
+    }
+    scrollToWord(hlIdx);
+  }
+  // Live geometry: a word's current visual center-Y measured from the prompter
+  // viewport top (getBoundingClientRect is transform-aware, so scrollTarget =
+  // scrollY + (want − current) resolves to the exact translateY that lands the
+  // word at `want`, independent of the current scroll — no cached offsets, no
+  // offsetParent ambiguity, self-correcting every frame.)
+  function centerY(el) {
+    const pr = els.prompter.getBoundingClientRect();
+    const wr = el.getBoundingClientRect();
+    return (wr.top + wr.height / 2) - pr.top;
+  }
+  function scrollToWord(i) {
+    const sp = kSpans[i]; if (!sp) return;
+    const want = (els.prompter.clientHeight || 180) * 0.42; // current word sits high-center
+    scrollTarget = scrollY + (want - centerY(sp));
+  }
+  function scrollTail() {
+    const last = kSpans[kSpans.length - 1]; if (!last) return;
+    const want = (els.prompter.clientHeight || 180) * 0.6;  // newest line lower while composing
+    scrollTarget = scrollY + (want - centerY(last));
+  }
+  function applyScroll() {
+    if (!els.prompterInner) return;
+    const d = scrollTarget - scrollY;
+    scrollY = Math.abs(d) < 0.4 ? scrollTarget : scrollY + d * 0.16;
+    els.prompterInner.style.transform = 'translateY(' + scrollY.toFixed(1) + 'px)';
+  }
+  function finishKaraoke() {
+    karaokeOn = false;
+    for (const s of kSpans) { s.classList.remove('now'); s.classList.add('spoken'); }
+  }
+  /** Barge-in: freeze the prompter where Kate actually stopped — spoken words
+   *  stay lit, the unsaid remainder stays dim (it was never said). */
+  function freezeKaraoke() {
+    karaokeOn = false;
+    for (let i = 0; i < kSpans.length; i++) {
+      const s = kSpans[i];
+      s.classList.remove('now');
+      if (i <= hlIdx) s.classList.add('spoken');
+    }
+  }
+
+  // ── Kate turn (stream reply → ONE gapless TTS stream) ─────────────────────
+  // The reply streams from the shim as clean, markdown-stripped SENTENCES (one
+  // per SSE chunk). We collect them and, when the reply finishes, synthesize the
+  // WHOLE reply as a single gapless timeline via /api/voice/stream (raw PCM),
+  // scheduling the chunks sample-accurately. No per-sentence request, no
+  // onended-chaining of padded clips → no inter-sentence pause.
+  async function sendToKate(text) {
+    els.you.classList.remove('dim');
+    els.you.innerHTML = '“<span>' + escapeHtml(text) + '</span>”';
+    setState('thinking');
+    if (fd) fd.engine.thinkStarted();  // speech from here on can cancel the turn
+    const gen = ++ttsGen;   // supersede any prior turn's in-flight stream + scheduled audio
+    stopAllTts();
+    resetPrompter();
+    showCursor(true);
+    chatAbort = new AbortController();
+    const signal = chatAbort.signal;
+    const sentences = [];
+    let full = '';
+    try {
+      const res = await fetch('/v1/chat/completions', {
+        method: 'POST', credentials: 'include', signal,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'kate', stream: true, messages: [{ role: 'user', content: text }] }),
+      });
+      if (!res.ok || !res.body) throw new Error('chat ' + res.status);
+      const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = '';
+      for (;;) {
+        const { value, done } = await reader.read(); if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let nl;
+        while ((nl = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
+          if (!line.startsWith('data:')) continue;
+          const payload = line.slice(5).trim();
+          if (payload === '[DONE]') continue;
+          let chunk = null;
+          try { chunk = JSON.parse(payload); } catch (_) {}
+          if (!chunk) continue;
+          // The shim stamps the Hearth conversation id into the OpenAI-compat
+          // chunk id (`chatcmpl-<id>`) — the only client handle for /cancel.
+          if (!convId && typeof chunk.id === 'string' && chunk.id.startsWith('chatcmpl-')) {
+            convId = chunk.id.slice('chatcmpl-'.length);
+          }
+          const delta = chunk.choices?.[0]?.delta?.content || '';
+          if (!delta) continue;
+          full += delta;
+          const s = delta.trim();
+          if (s) {
+            sentences.push(s);           // each shim chunk = one clean sentence
+            appendWords(s);              // grow the prompter word-by-word (dim, unspoken)
+            showCursor(true);            // keep the caret at the tail
+            scrollTail();                // keep the newest line in view while composing
+          }
+        }
+      }
+    } catch (e) {
+      // A deliberate barge/hang-up abort exits silently — its canceller
+      // already reopened listening; only a REAL failure shows the apology.
+      if (gen !== ttsGen || (e && e.name === 'AbortError')) { showCursor(false); return; }
+      showFallbackText("I'm having trouble reaching myself right now.");
+    }
+    showCursor(false);
+    if (gen !== ttsGen) return;  // superseded mid-stream (barge) — canceller owns the mic
+    if (!kSpans.length && full.trim()) showFallbackText(full);
+    if (sentences.length) { try { await speakReply(sentences, gen); } catch (_) {} }
+    awaitDrainThenListen(gen);
+  }
+
+  // ── Kate's real voice — ONE gapless PCM stream, scheduled sample-accurate ──
+  // /api/voice/stream returns the WHOLE reply as raw int16 / mono / 24 kHz PCM,
+  // one continuous timeline (silence trimmed, one even breath between sentences).
+  // We read it incrementally and schedule each chunk at a running cursor so the
+  // chunks abut with no gap; the server races ahead of playback (RTF ~2.6) so the
+  // cursor stays ahead of the clock — a stall only ever costs a brief catch-up.
+  const TTS_SR = 24000;
+  let ttsGen = 0;             // bumped per turn; a stale gen abandons its stream + audio
+  let ttsStreaming = false;   // true while reading the PCM body
+  let playCursor = 0;         // AudioContext time at which the next chunk starts
+  let activeSources = [];     // scheduled BufferSources, for stop-on-supersede
+
+  async function speakReply(sentences, gen) {
+    ttsStreaming = true;
+    setState('speaking');
+    if (fd) {
+      fd.engine.speakStarted();  // arm the echo-hardened barge gate
+      els.statusText.textContent = 'speaking — talk to interrupt';
+      try { ttsGain.gain.cancelScheduledValues(0); ttsGain.gain.value = 1; } catch (_) {}
+    }
+    try {
+      const r = await fetch('/api/voice/stream', {
+        method: 'POST', credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sentences }),
+      });
+      if (!r.ok || !r.body) throw new Error('tts ' + r.status);
+      const sr = parseInt(r.headers.get('x-sample-rate') || '', 10) || TTS_SR;
+      const reader = r.body.getReader();
+      let carry = null;  // leftover odd byte across chunk boundaries (int16 = 2 bytes)
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (gen !== ttsGen || !ac) { try { await reader.cancel(); } catch (_) {} break; }
+        let bytes = value;
+        if (carry) { const m = new Uint8Array(carry.length + bytes.length); m.set(carry); m.set(bytes, carry.length); bytes = m; carry = null; }
+        const even = bytes.length - (bytes.length & 1);
+        if (even < bytes.length) carry = bytes.slice(even);
+        if (even === 0) continue;
+        const aligned = bytes.slice(0, even);              // fresh 2-byte-aligned copy
+        const i16 = new Int16Array(aligned.buffer, 0, even >> 1);
+        const f32 = new Float32Array(i16.length);
+        for (let i = 0; i < i16.length; i++) f32[i] = i16[i] / 32768;
+        scheduleChunk(f32, sr, gen);
+      }
+    } finally {
+      ttsStreaming = false;
+      // The whole reply is scheduled — playCursor is now the true end-of-audio,
+      // so the karaoke sweep locks to the exact total duration.
+      if (gen === ttsGen && audioStartSet) audioDur = Math.max(0.6, playCursor - audioStart);
+    }
+  }
+
+  function scheduleChunk(f32, sr, gen) {
+    if (gen !== ttsGen || !ac || f32.length === 0) return;
+    const buf = ac.createBuffer(1, f32.length, sr);
+    buf.copyToChannel(f32, 0);
+    const node = ac.createBufferSource();
+    node.buffer = buf;
+    node.connect(ttsGain);
+    const now = ac.currentTime;
+    // ~80ms jitter lead on the first chunk; on an underrun (a network stall left
+    // the cursor behind the clock) restart just ahead of now — a rare, brief
+    // catch-up, no worse than a normal breath. Otherwise chunks abut exactly.
+    if (playCursor < now + 0.02) playCursor = now + 0.08;
+    node.start(playCursor);
+    // First audible chunk = the karaoke t0. The word list is complete by now
+    // (the reply text fully streamed before audio began), so lock the sweep in.
+    if (!audioStartSet) {
+      audioStart = playCursor; audioStartSet = true; karaokeOn = true;
+      showCursor(false); finalizeKaraokeWords();
+    }
+    playCursor += buf.duration;
+    activeSources.push(node);
+    node.onended = () => { activeSources = activeSources.filter((s) => s !== node); };
+  }
+
+  function stopAllTts() {
+    for (const s of activeSources) { try { s.stop(); } catch (_) {} }
+    activeSources = [];
+    playCursor = 0;
+    audioStartSet = false; audioDur = 0; karaokeOn = false; // a fresh turn re-arms the sweep
+  }
+
+  function awaitDrainThenListen(gen) {
+    const tick = () => {
+      // A barge superseded this turn mid-drain — its handler already stopped
+      // playback and reopened listening; this poller must not double-listen.
+      if (gen !== undefined && gen !== ttsGen) return;
+      const stillPlaying = !!ac && playCursor > ac.currentTime + 0.02;
+      if (!ttsStreaming && !stillPlaying) {
+        finishKaraoke();                       // land every word as "spoken"
+        els.you.classList.add('dim'); els.you.textContent = '';
+        resumeListening(false);
+      } else setTimeout(tick, 120);
+    };
+    setTimeout(tick, 160);
+  }
+
+  // ── Wiring ───────────────────────────────────────────────────────────────
+  function escapeHtml(s) { return s.replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c])); }
+  function showErr(m) { els.err.textContent = m; }
+
+  els.mute.addEventListener('click', () => {
+    muted = !muted;
+    els.mute.classList.toggle('muted', muted);
+    els.mute.querySelector('span').textContent = muted ? 'Unmute' : 'Mute mic';
+    if (muted) {
+      if (fd) { fdListening = false; utterFrames = []; fd.engine.sessionEnded(); }
+      stopListening();
+      setState('idle');
+    } else {
+      resumeListening(false);
+    }
+  });
+  els.close.addEventListener('click', () => {
+    // Hanging up mid-think abandons the turn — abort it server-side so the
+    // runtime persists "(stopped)" instead of finishing to nobody.
+    if (state === 'thinking') { try { chatAbort?.abort(); } catch (_) {} fireCancelTurn(); }
+    if (fd) { fd.engine.sessionEnded(); try { fd.micVAD.destroy(); } catch (_) {} }
+    stopListening();
+    try { micStream?.getTracks().forEach((t) => t.stop()); } catch(_){}
+    // Embedded in the app's glassmorphic pane → ask the parent to close it
+    // (clearing the iframe unloads us + frees the mic). Standalone → home.
+    if (window.parent && window.parent !== window) window.parent.postMessage({ type: 'kate-voice-close' }, '*');
+    else location.href = '/app/';
+  });
+
+  els.enter.addEventListener('click', async () => {
+    try {
+      await initAudio();
+      if (ac.state === 'suspended') await ac.resume();
+      // Arm full-duplex (Silero VAD + barge-in) when the vendored assets are
+      // present; otherwise fall back to the legacy MediaRecorder loop, which
+      // is the only path that needs MediaRecorder at all.
+      fd = await initFullDuplex();
+      if (!fd && !window.MediaRecorder) { showErr('This browser can’t record audio for voice.'); return; }
+      els.gate.classList.add('hide');
+      requestAnimationFrame(draw);
+      setTimeout(() => resumeListening(false), 300);
+    } catch (e) {
+      showErr(e && e.name === 'NotAllowedError' ? 'Microphone permission denied.' : ('Audio error: ' + (e && e.message)));
+    }
+  });
+})();
+</script>
+</body>
+</html>

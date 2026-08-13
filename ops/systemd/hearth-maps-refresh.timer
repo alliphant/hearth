@@ -1,0 +1,10 @@
+[Unit]
+Description=Hearth maps stack: monthly OSM refresh (first Sunday of the month at 03:00)
+
+[Timer]
+OnCalendar=Sun *-*-1..7 03:00:00
+Persistent=true
+Unit=hearth-maps-refresh.service
+
+[Install]
+WantedBy=timers.target

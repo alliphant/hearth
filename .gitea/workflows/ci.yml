@@ -1,0 +1,38 @@
+# Hearth CI ring — the per-merge gate (Gitea Actions).
+#
+# LIVE as of 2026-07-07: the `glacier-ci` act_runner (standalone compose at
+# /docker/hearth-ci-runner.yml on the box, label `self-hosted`) executes this
+# on Beatrice's autonomous Gitea PRs. Runs the deterministic ring — `tsc
+# --noEmit`, the source guards, and the self-contained smoke subset (no
+# network, no live orchestrator, no GPU). Reports a red/green `ci-ring` check.
+#
+# ENFORCEMENT: reports the check but does NOT hard-block yet — Gitea branch
+# protection requiring it is available (self-hosted, no paywall) but was left
+# off (signal-level chosen 2026-07-07; it would couple merges to this runner's
+# uptime). To hard-gate Beatrice in-repo instead, fold the ring into her
+# `run_checks` (change_pipeline.ts). The live-model golden suite stays NIGHTLY.
+#
+# Trigger is pull_request ONLY on purpose: a direct sync-push of already-merged
+# main (which passed GitHub CI first) shouldn't re-burn the self-hosted runner.
+
+name: ci-ring
+on:
+  pull_request:
+
+jobs:
+  ci-ring:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run the CI ring
+        run: bun run ci

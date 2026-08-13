@@ -1,0 +1,58 @@
+# ops/sanitize-rules.yaml — TEMPLATE
+#
+# Declarative rules read by `scripts/sanitize.ts`, which transforms a
+# private working repo into a public, sanitized mirror. This shipped
+# copy is a structural example: the real rules file (which maps real
+# names, hosts and coordinates to placeholders) is deliberately not
+# published — publishing the mapping would undo the sanitization.
+#
+# Sections:
+#   1. exclude_paths        — files NEVER included in the output
+#   2. text_replacements    — regex find/replace applied to every file
+#   3. file_overrides       — per-path handlers (rename / copy_from / delete)
+#   4. forbidden_in_output  — literals that must NOT appear after transforms;
+#                             the audit fails the run if any match
+#   5. audit_excludes       — files exempt from the audit
+#   6. transform_excludes   — files copied verbatim (skip text_replacements)
+#
+# `bun run sanitize` is a safe dry-run; `bun run sanitize:apply` writes.
+
+exclude_paths:
+  - ".git/**"
+  - "node_modules/**"
+  - "data/**"
+  - "logs/**"
+  - "**/*.log"
+  - "**/*.db"
+  - ".env"
+  - ".env.local"
+  - ".claude/**"
+  - "**/__pycache__/**"
+  - "**/*.pyc"
+  - "**/*.tsbuildinfo"
+
+text_replacements:
+  # Name-shorthand form: matches the name as a complete word.
+  - { name: "Alice", to: "Casey" }
+  # Raw-regex form: use for multi-word phrases or anchored substrings.
+  - { pattern: "Springfield, USA", to: "Anytown, USA" }
+  - { pattern: "10\\.0\\.0\\.", to: "192.168.0." }
+
+file_overrides:
+  # Per-install files ship as curated examples, not live copies.
+  - path: "config/users.yaml"
+    action: "rename"
+    to: "config/users.yaml.example"
+
+forbidden_in_output:
+  - "\\bAlice\\b"
+  - "Springfield"
+
+audit_excludes:
+  - "ops/sanitize-rules.yaml"
+  - ".git/**"
+
+transform_excludes:
+  # The rules file itself — text_replacements applied to its own
+  # patterns would silently corrupt them.
+  - "ops/sanitize-rules.yaml"

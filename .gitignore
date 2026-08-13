@@ -1,0 +1,70 @@
+# Runtime SQLite + WAL/SHM siblings
+data/
+
+# Local env overrides (.env.example is checked in)
+.env
+
+# Apple MusicKit private key — NEVER commit
+musickit/
+*.p8
+
+# Bun / Node
+node_modules/
+*.tsbuildinfo
+
+# Editor / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Local dev artifacts
+/tmp/
+*.log
+
+# Python bytecode (Hermes integration)
+__pycache__/
+*.pyc
+
+# ToolLoader ephemeral hot-reload snapshots (created + deleted in-process)
+*__snap__*
+
+# Claude Code per-machine settings (.claude/settings.json is team-wide and checked in)
+.claude/settings.local.json
+# Per-machine Claude Code session state. NOT a blanket .claude/ ignore on
+# purpose: launch.json and preview-scrum.ts under there are real shared tooling.
+# `worktrees/` is where `git worktree add` puts agent worktrees — checking those
+# in would commit whole nested checkouts; scrum-board.json is a local cache of
+# the board that the API is the source of truth for.
+.claude/worktrees/
+.claude/scrum-board.json
+# launch.json holds per-machine dev-server env, including service tokens
+# (Z_SENSORS_TOKEN). It was swept into a commit by a `git add -A` on
+# 2026-08-03 and pushed to both remotes; the token was rotated. Never track it.
+.claude/launch.json
+
+# Ad-hoc diagnostic / probe scratch (camera + presence + infra investigation
+# sessions). Kept on disk for reference, out of git. If a probe graduates into
+# a real tool/script, move it out of these paths and commit it deliberately.
+scripts/*-probe*.py
+scripts/cpai-alpr-test.sh
+scripts/ha-config-probe.py
+scripts/unifi-camera-caps.py
+scripts/vc-watchdog.sh
+ops/presence/
+ops/nsfw/model/
+
+# also match a node_modules SYMLINK (worktrees symlink to the main tree; the
+# trailing-slash form above only matches a real directory)
+node_modules
+# web voice orb VAD runtime (fetched by src/app/client/voice/fetch-vad-web-assets.sh)
+src/app/client/voice/vendor/
+
+# The live household roster. Untracked ON PURPOSE — the orchestrator
+# REWRITES it at runtime (UserRegistry.set_pin, POST /api/admin/users) and
+# it holds argon2id password hashes, PIN hashes and members' emails.
+# Tracking it meant the deploy checkout drifted from origin/main on every
+# PIN set (blocking `git pull --ff-only`) while a `git checkout` or
+# `reset --hard` would have destroyed real accounts. On a deploy it lives
+# outside the tree entirely via HEARTH_USERS_PATH; see config/users.yaml.example.
+config/users.yaml

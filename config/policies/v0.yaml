@@ -1,0 +1,65 @@
+# Hearth v0 policy rules — evaluated top-to-bottom, first match wins.
+#
+# Rule shape:
+#   - name: <human-readable name, used in audit + gate_decision.matched_rule>
+#     applies_when:
+#       tool_risk:               "read" | "write_internal" | "send_external" | "spend_money"
+#       recipient_flags:         [sensitive, do_not_contact, ...]    (array contains all of)
+#       recipient_novelty:       ">=N" | "<=N" | "==N"               (integer comparator)
+#       recipient_relationship:  "family" | "friend" | "colleague" | "acquaintance" | "service"
+#       time_of_day:             "HH:MM-HH:MM"                       (overnight wrap supported)
+#       intent_category:         arbitrary string set by the planner
+#     decision: "auto" | "approve" | "deny"
+#     modifiers:
+#       cooldown_ms: <int>      (gate waits this long before executing after approval)
+#
+# All matchers must hold simultaneously for a rule to fire.
+# `applies_when:` may be omitted entirely on the catch-all default rule.
+
+rules:
+  # Read tier is always auto — surfaces vault data only.
+  - name: read_actions_auto
+    applies_when:
+      tool_risk: read
+    decision: auto
+
+  # Internal writes (Scribe tools — vault notes, audit log) are auto.
+  - name: write_internal_actions_auto
+    applies_when:
+      tool_risk: write_internal
+    decision: auto
+
+  # Hard-stop: never message anyone tagged do_not_contact.
+  - name: send_external_do_not_contact_deny
+    applies_when:
+      tool_risk: send_external
+      recipient_flags: [do_not_contact]
+    decision: deny
+
+  # Sensitive recipient + low-novelty (rarely contacted) → require approval with a cooldown.
+  - name: send_external_to_sensitive_high_novelty_approve_cooldown
+    applies_when:
+      tool_risk: send_external
+      recipient_flags: [sensitive]
+      recipient_novelty: ">=7"
+    decision: approve
+    modifiers:
+      cooldown_ms: 60000
+
+  # Any other external send goes through approval.
+  - name: send_external_default_approve
+    applies_when:
+      tool_risk: send_external
+    decision: approve
+
+  # All spends require approval with a short cooldown.
+  - name: spend_money_default_approve
+    applies_when:
+      tool_risk: spend_money
+    decision: approve
+    modifiers:
+      cooldown_ms: 30000
+
+  # Catch-all. Required — the engine refuses to boot without a default rule.
+  - name: default_deny
+    decision: deny

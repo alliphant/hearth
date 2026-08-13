@@ -1,0 +1,231 @@
+# Research source strategy — DATA, not code.
+#
+# Loaded by src/core/research_roster.ts, read fresh on every call (a hand edit
+# is live on the next investigation; no restart). Everything here is a fact
+# about the world or about OUR OWN infrastructure that the model then acts on —
+# never an if-chain standing in for the model's judgement (LAW #1).
+#
+# Three sections:
+#
+#   attribution — which hosts make a BROWSER fetch traceable back to this
+#                 household. This is an inventory of our own signed-in Firefox
+#                 profiles, not a blocklist of the web.
+#   records     — the SHAPE of the public-record systems a records question
+#                 needs, and how to find the real one once a jurisdiction is
+#                 resolved. Deliberately NOT a per-county URL list.
+#   demote      — sources that look authoritative in a result list and are not.
+#                 Every host here earned its place in a real failed
+#                 investigation; see the `why`.
+
+# ---------------------------------------------------------------------------
+# 1. Attribution
+# ---------------------------------------------------------------------------
+# A fetch is `passive` when nothing about it can be traced to this household by
+# the site or by the person being researched, and `attributable` when it
+# carries a logged-in identity.
+#
+# Firecrawl is anonymous, so the ANONYMOUS path is always passive. The browser
+# host is different: it keeps a warmed, per-specialist Firefox profile, and
+# those profiles are signed in to a handful of sites by hand (a subscription
+# that will not render otherwise). A browser fetch of one of those hosts is
+# attributable — and on a social network it is worse than attributable, because
+# the site tells the subject who looked.
+#
+# The hosts below are therefore refused the browser path whenever the
+# investigation's cap is `passive` (which the runner sets for every PERSON
+# subject). Suffix-matched, so `linkedin.com` covers `www.linkedin.com`.
+attribution:
+  # A host we have not enumerated is assumed passive: an un-signed-in Firefox
+  # render discloses no more than Firecrawl does. Being wrong in this direction
+  # costs nothing; the enumerated set is where the household actually has
+  # sessions.
+  default_browser_tier: passive
+
+  hosts:
+    - host: linkedin.com
+      tier: attributable
+      why: >-
+        LinkedIn records profile views against the signed-in account and shows
+        the subject who looked. This is the live risk path, not a hypothetical:
+        the logged-out guest wall is ~550 characters, under the thin-shell
+        threshold that triggers browser escalation, so an unguarded person
+        lookup walks straight from an anonymous fetch into a signed-in profile
+        view that notifies the person being researched.
+
+    - host: facebook.com
+      tier: attributable
+      why: >-
+        A signed-in view is attached to the household account, feeds "People
+        You May Know" on both sides, and can surface the household to the
+        subject.
+
+    - host: instagram.com
+      tier: attributable
+      why: >-
+        Signed-in views of stories and profiles are logged and shown to the
+        account owner.
+
+    - host: x.com
+      tier: attributable
+      why: >-
+        A signed-in session ties views and any accidental interaction to the
+        household account.
+
+    - host: twitter.com
+      tier: attributable
+      why: Legacy host for x.com; same signed-in session.
+
+    - host: nytimes.com
+      tier: attributable
+      why: >-
+        The browser profile holds a paid subscription session, so reads are
+        logged against a named subscriber account. Harmless for topic research,
+        wrong for researching a person.
+
+# ---------------------------------------------------------------------------
+# 2. Records
+# ---------------------------------------------------------------------------
+# A records question is unanswerable until you know WHICH system holds the
+# record. "Property in Georgetown TX" does not live in a search index; it lives
+# in the Williamson County Appraisal District. So records sources are declared
+# in two groups: those that need no jurisdiction, and those that are meaningless
+# without one.
+records:
+  # Reachable directly, real coverage, no jurisdiction needed. Try these first —
+  # they are the highest answer-per-fetch in the whole roster.
+  national:
+    - id: courtlistener
+      label: CourtListener / RECAP
+      covers: [federal_courts, bankruptcy, state_appellate, dockets, opinions]
+      via: tool
+      tool: courtlistener_search
+      why: >-
+        Free API with genuine federal coverage (PACER/RECAP) plus a growing
+        state appellate corpus. Party-name search returns real dockets with
+        case numbers, courts and filing dates — the single highest-value
+        records source we have.
+
+    - id: sec_edgar
+      label: SEC EDGAR full-text search
+      covers: [securities_filings, officers, business_affiliations]
+      via: url
+      url: https://efts.sec.gov/LATEST/search-index?q=%22{query}%22
+      why: Names officers and affiliates of filing entities.
+
+    - id: opencorporates
+      label: OpenCorporates
+      covers: [business_registration, officers, company_affiliations]
+      via: url
+      url: https://opencorporates.com/officers?q={query}
+      why: >-
+        Cross-jurisdiction company and officer registry; useful for tying a
+        person to businesses without knowing the state first.
+
+  # Per-jurisdiction systems. We describe the KIND of system, how to find the
+  # real one once the county is resolved, and what counts as an official host.
+  # Listing every US county's portal URL would rot within a year; a discovery
+  # template plus an official-host floor does not.
+  jurisdiction:
+    - id: county_appraisal_district
+      label: County appraisal district / assessor
+      covers: [property_ownership, parcel, valuation, homestead]
+      discover: "{county} {state} appraisal district property search by owner"
+      # `*cad.org` is the explicit loose-tail form: Texas appraisal districts
+      # are wcad.org (Williamson), hcad.org (Harris), dcad.org (Dallas) — a real
+      # family of official hosts sharing no label boundary. The star is required
+      # so the looseness is deliberate; a bare `cad.org` would match nothing.
+      official_host_suffixes: ['.gov', '.us', '*cad.org', '.texas.gov']
+      why: >-
+        Property ownership is held by the county appraisal district (TX) or
+        assessor (most other states), never by a national aggregator. This is
+        the system that actually answers "does he own property at this address".
+
+    - id: county_clerk
+      label: County clerk — deeds, liens, UCC
+      covers: [deeds, liens, ucc, marriage]
+      discover: "{county} {state} county clerk official public records search"
+      official_host_suffixes: ['.gov', '.us']
+      why: Recorded instruments — who conveyed what to whom, and when.
+
+    - id: district_clerk
+      label: District / superior court clerk — civil and family
+      covers: [civil_suits, divorce, protective_orders, judgments]
+      discover: "{county} {state} district clerk case records search"
+      official_host_suffixes: ['.gov', '.us']
+      why: >-
+        Divorce, civil judgments and protective orders are county-level and
+        will not appear in CourtListener's federal corpus.
+
+    - id: sheriff_jail
+      label: County sheriff / jail roster
+      covers: [arrests, bookings, custody]
+      discover: "{county} {state} sheriff inmate roster search"
+      official_host_suffixes: ['.gov', '.us']
+      why: Current custody and recent bookings.
+
+    - id: state_business_registry
+      label: Secretary of State business registry
+      covers: [business_registration, registered_agent]
+      discover: "{state} secretary of state business entity search"
+      official_host_suffixes: ['.gov', '.us']
+      why: State-level company registration and registered agents.
+
+    - id: sex_offender_registry
+      label: State sex-offender registry
+      covers: [registry]
+      discover: "{state} sex offender registry public search"
+      official_host_suffixes: ['.gov', '.us']
+      why: Statutorily public; state-operated.
+
+    - id: state_corrections
+      label: State department of corrections inmate lookup
+      covers: [incarceration, parole, supervision]
+      discover: "{state} department of corrections offender search"
+      official_host_suffixes: ['.gov', '.us']
+      why: Current and prior incarceration under state supervision.
+
+# ---------------------------------------------------------------------------
+# 3. Demoted sources
+# ---------------------------------------------------------------------------
+# Demoted, not banned. These still appear in results and the model may still
+# read one — they simply never take a fetch slot ahead of a real record system,
+# because in practice they consume the budget and return nothing.
+#
+# Every entry below was fetched during the Daniel Torres investigation
+# (ri_3kq84nfd4mz0) and the byte counts are from the persisted bodies.
+demote:
+  - host: spokeo.com
+    why: 'teaser: "412 matches" behind a paywall, no subject content (18,988 bytes of nothing)'
+  - host: beenverified.com
+    why: same aggregator pattern as Spokeo — paywalled teaser
+  - host: truthfinder.com
+    why: paywalled teaser
+  - host: intelius.com
+    why: paywalled teaser
+  - host: whitepages.com
+    why: paywalled teaser
+  - host: zoominfo.com
+    why: 'returned "Access to this page has been denied" (146 bytes)'
+  - host: countyoffice.org
+    why: >-
+      SEO index stub that impersonates a county record system; returned 111 and
+      106 bytes. The real county system is in the `jurisdiction` roster above.
+  - host: staterecords.org
+    why: >-
+      SEO farm. Returned a 32KB Pleasantville page during an investigation whose
+      subject lives in Texas — it matched the HOUSEHOLD's location, not the
+      subject's.
+  - host: publicrecords.org
+    why: SEO farm, same shape as staterecords.org
+  - host: coloradopublicrecords.org
+    why: SEO farm, same shape as staterecords.org
+  - host: loopnet.com
+    why: 'commercial-listing sitemap index pages, not records (5,478 bytes of link list)'
+  - host: momlovesbest.com
+    why: 'baby-name content: matched the given name, never the person'
+  - host: bibledictionarytoday.com
+    why: 'name etymology: matched the given name, never the person'
+  - host: behindthename.com
+    why: name etymology
+  - host: ancestry.com
+    why: paywalled; genealogy surname tables match a surname, not a person

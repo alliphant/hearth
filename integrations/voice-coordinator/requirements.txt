@@ -1,0 +1,16 @@
+# Hearth Voice Coordinator runtime deps.
+#
+# Pinned conservatively; bump deliberately (the repo's "dep upgrades are their
+# own prompt" rule). aioesphomeapi is the load-bearing one — it must match a
+# build that exposes subscribe_voice_assistant with the handle_* kwargs HA uses.
+aioesphomeapi>=24.0.0
+httpx>=0.27.0
+aiohttp>=3.9.0            # health endpoint only
+# Silero VAD for the open-mic endpointing + barge-in detection. CPU is fine
+# (frames are 32 ms). Bound in coordinator._vad_decide during bring-up.
+onnxruntime>=1.17.0
+numpy>=1.24.0
+# Pre-speech alert tones (tones.py): synthesize the EAS attention tone + a soft
+# chime with numpy, encode to mp3 (the device's confirmed format). Pure wheel,
+# no system deps (manylinux cp312). Fail-soft if synth fails → no tone, alert speaks.
+lameenc>=1.7.0

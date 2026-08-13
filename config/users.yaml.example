@@ -1,0 +1,119 @@
+# config/users.yaml — sample
+#
+# Copy to config/users.yaml and fill in. Hearth single-user out of the
+# box; the data model is multi-user-ready so additional entries can be
+# added without code changes.
+#
+# ⚠ config/users.yaml IS NOT TRACKED IN GIT, deliberately.
+#
+# The orchestrator REWRITES it at runtime — `UserRegistry.set_pin` and
+# `POST /api/admin/users` both re-emit the whole file through the YAML
+# Document API — and it carries argon2id password hashes, PIN hashes and
+# household members' email addresses. A file the server rewrites, holding
+# credentials, cannot live in version control: the deploy checkout drifts
+# from origin/main the moment anyone sets a PIN (blocking
+# `git pull --ff-only`), and any `git checkout` / `reset --hard` /
+# unpopped `stash` silently destroys real accounts.
+#
+# On a deploy it therefore lives OUTSIDE the repo tree, with
+# HEARTH_USERS_PATH pointing at it:
+#
+#   host   /docker/hearth/config/users.yaml
+#   mount  /docker/hearth/config → /data/config   (hearth-orchestrator)
+#   env    HEARTH_USERS_PATH=/data/config/users.yaml
+#
+# For local development just copy this file to config/users.yaml (which
+# is gitignored) and leave HEARTH_USERS_PATH unset — the default resolves
+# to ./config/users.yaml.
+#
+# config/notifications.yaml is adjacent (same registry,
+# HEARTH_NOTIFICATIONS_PATH) but carries no secrets and nothing writes it
+# at runtime, so it stays tracked. Move it out the same way if that
+# changes.
+#
+# Each user binds messaging identities (Telegram, Discord, iMessage) to
+# a Hearth identity. allowed_specialists is "*" or a list of specialist
+# ids. timezone evaluates quiet_hours against wall-clock time.
+#
+# `dietary` is an optional per-user profile read by Brigid (the cook).
+#
+# `pin_hash` is the lowercase-hex SHA-256 of the user's 4-digit PIN —
+# generate via `bun run scripts/hash-pin.ts <digits>`. Note this is an
+# UNSALTED digest over a 10,000-candidate space, i.e. reversible on
+# sight; it is not a secure credential store. Tracked separately.
+#
+# Schema validated by src/core/users.ts (UserConfigSchema). Strict —
+# unknown fields fail loudly. A parse or validation failure KEEPS the
+# previously-loaded users rather than emptying the household, so check
+# the boot log after editing.
+
+# ── Household context ─────────────────────────────────────────────────────
+# Drives persona token substitution at boot. The persona YAMLs ship
+# generic ({{user_name}}, {{pet_names}}, {{primary_city}}, ...) and bind
+# here at load time. Edit any of these and restart the orchestrator;
+# every specialist's persona re-renders with the new values.
+#
+# Every field is optional. Tokens with no binding fall back to the
+# defaults declared in each persona (typically a generic phrase like
+# "your area" or "the household").
+household:
+  brand: "Hearth"                      # → {{household_brand}}
+  # home_name: ""                      # → {{home_name}}  ("the lake house", "the bramble", etc.)
+  # primary_city: ""                   # → {{primary_city}}
+  # primary_region: ""                 # → {{primary_region}}
+  # usda_growing_zone: ""              # → {{usda_growing_zone}} ("5b", "7a")
+  # partner_name: ""                   # → {{partner_name}}  (the "you and ___" person)
+  pets: []                             # add { name, species } entries — drives Anya
+  vehicles: []                         # first entry is "primary" for Iris's plan_ev_day
+  nearby_venues: []                    # Maggie's tour-radius venue list
+  nearby_cities: []                    # Maggie's tour-radius city list
+
+users:
+  - id: "admin"
+    display_name: "Admin"
+    telegram_user_id: null
+    telegram_chat_id: null
+    app_token: null
+    allowed_specialists: "*"
+    timezone: "America/Denver"
+    notification_config_ref: "default_user"
+    # 4-digit PIN, SHA-256 hex (lowercase). Default below = "0000" — CHANGE THIS.
+    pin_hash: "9af15b336e6a9619928537df30b2e6a2376569fcf9d7e773eccede65606529a0"
+    theme: "dark"
+    role: "admin"
+    # Exactly ONE user should carry tier "owner" — full data visibility,
+    # and the tier legacy paths default to. Others are "household" (sees
+    # shared People/Places entities plus their own data) or "friend" (a
+    # full silo: everything they write is stamped private_to their own id,
+    # and allowed_specialists bounds who they can reach at all).
+    # The cordon applies to the owner too: no god-view of a member's
+    # private notes. The one sanctioned cross-cordon read is Kate's
+    # audited `review_user_activity`.
+    tier: "owner"
+    # Email + password auth. Written by the auth flow at runtime; leave
+    # null here and let the first login/bootstrap populate them.
+    email: "admin@example.com"
+    password_hash: null
+    password_updated_at: null
+    must_change_password: true
+    must_set_pin: true
+    # Per-user home anchor. `home_anchor.ts` resolves "is this user home?"
+    # from a location packet's coordinates against these within
+    # HEARTH_HOME_RADIUS_M (180m) — it is THE implementation; don't write
+    # another `place_id === 'home'` check. Also the weather connector's
+    # fallback when no fresh location packet exists. Give every member
+    # their own block, or their brief reads the owner's weather.
+    home_location:
+      lat: 39.7392
+      lng: -104.9903
+      label: "Denver, CO"
+    # Optional dietary profile read by Brigid. Add per-member entries
+    # as the household grows; daily_calorie_target is the soft aim,
+    # daily_calorie_max the hard ceiling.
+    dietary:
+      daily_calorie_target: null
+      daily_calorie_max: null
+      macro_priority: "balanced"
+      restrictions: []
+      favorites: []
+      dislikes: []

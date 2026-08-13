@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+#
+# Hearth source-hygiene pre-commit gate.
+#
+# Runs the two cheap source guards before each commit:
+#   - guard:time     — no hand-rolled wall-clock formatting outside src/core/time.ts
+#   - guard:encoding — no NUL bytes / invalid UTF-8 in tracked text source
+#
+# Activate (per clone, one-time):
+#     git config core.hooksPath .githooks
+#
+# Bypass a single commit if you must:  git commit --no-verify
+#
+set -euo pipefail
+
+if ! command -v bun >/dev/null 2>&1; then
+  echo "pre-commit: bun not found on PATH — skipping source guards" >&2
+  exit 0
+fi
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+bun run guard

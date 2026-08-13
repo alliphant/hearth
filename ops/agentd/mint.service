@@ -1,0 +1,104 @@
+# ops/agentd/mint.service — reference systemd --user unit for agentd on MINT,
+# the always-on browser host.
+#
+# This is the CANONICAL copy. The live unit lives at
+#   ~/.config/systemd/user/agentd.service
+# on the always-on host; keep the two byte-identical. `ops/agentd/deploy.sh --check` diffs
+# the live unit against this file and fails on drift.
+#
+# MINT vs AVALANCHE — why a second unit rather than one shared file:
+# source/src/config.ts is deliberately PORTABLE; every box-specific value is an
+# Environment= override here rather than a hard-code back in config.ts. the always-on host
+# differs from the workstation in more than paths, so the overrides are worth reading
+# rather than skimming:
+#
+#   AGENTD_ALWAYS_ON         the always-on host NEVER sleeps — it hosts the FRIDAY kiosk,
+#                            Firecrawl, Home Assistant, searxng, mealie,
+#                            matter-server and mosquitto. The whole WoL / drain
+#                            / suspend state machine is not just unused but
+#                            actively dangerous here (`systemctl suspend` would
+#                            take the household stack down). This unarms the
+#                            drain ticker and makes /wake-ack a 409.
+#                            THIS is the power win: no workstation POST+resume
+#                            cycle per scrape, and no discrete GPU spinning up
+#                            in a house that evacuates heat slowly.
+#
+#   AGENTD_COMPOSITOR_*      the always-on host runs GNOME, so kwin_wayland is not native and
+#                            `apt install kwin-wayland` would drag in 461
+#                            packages of Plasma. Weston's headless backend is
+#                            10 packages and gives the same nested, invisible
+#                            output — with HARDWARE GL, which is the part that
+#                            actually matters (verified on this box):
+#                              GL vendor:   AMD
+#                              GL renderer: AMD Radeon Graphics
+#                                           (radeonsi, gfx1151, LLVM 20.1.2)
+#                            gfx1151 is the integrated AI accelerator. A software (llvmpipe)
+#                            renderer string would be precisely the bot signal
+#                            this whole surface exists to avoid, so if you ever
+#                            change these args, re-verify the renderer.
+#                            --idle-time=0 stops weston idling out mid-session.
+#
+#   AGENTD_FIREFOX_BINARY    the always-on host's distro Firefox is a SNAP. Snap confinement
+#   AGENTD_GECKODRIVER_*     blocks both halves of what agentd needs: opening a
+#                            profile at an arbitrary path, and reaching the
+#                            per-session Wayland socket in XDG_RUNTIME_DIR. So
+#                            both binaries are unconfined Mozilla builds under
+#                            ~/opt. Firefox is pinned to the SAME version as
+#                            the workstation (152.0.5) on purpose — a profile opened
+#                            by a newer Firefox cannot be reopened by an older
+#                            one, and the two hosts share migrated profiles, so
+#                            a one-sided upgrade would strand the fallback.
+#                            Bump BOTH boxes together.
+#
+#   AGENTD_SESSION_BLOCKERS  The default set models a workstation ("is Jasper at
+#                            his desk"). the always-on host is a headless server: nobody sits
+#                            at it, and `external_ssh` — a default blocker —
+#                            would stall an in-turn browse for as long as any
+#                            admin stayed logged in. What genuinely contends
+#                            here is RAM (31 GiB system, since 96 of the 128 is
+#                            carved out to the iGPU) and package-manager locks.
+#
+#   AGENTD_MAX_SESSIONS      v1 serialized to one session globally; a second
+#                            agent got a 503. Fine when only Maggie browsed,
+#                            wrong now that Kate uses browse_url as her in-turn
+#                            web_fetch_clean failover — she would collide with
+#                            any background scrape. 32 threads and an idle iGPU
+#                            carry 3 comfortably.
+#
+# If you change a box-specific value, change it HERE and re-run
+# `deploy.sh --check` — do not reintroduce the value into config.ts.
+#
+# NB no After=graphical-session.target (the workstation has one): agentd on the always-on host is
+# fully headless and must come up without any seat session. `loginctl
+# enable-linger jasper` is what keeps this user manager — and /run/user/1000,
+# where the session sockets live — alive across logouts and reboots.
+[Unit]
+Description=Hearth agentd — LAN browser daemon (always-on host)
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/bun run /home/jasper/hearthoperator/agentd/src/main.ts
+WorkingDirectory=/home/jasper/hearthoperator/agentd
+Restart=on-failure
+RestartSec=3
+Environment="AGENTD_PORT=4446"
+Environment="AGENTD_BIND=0.0.0.0"
+Environment="AGENTD_TOKEN_FILE=/home/jasper/.config/agentd/token"
+Environment="AGENTD_ACTIVITY_SCRIPT=/home/jasper/hearthoperator/bin/mint-activity.sh"
+Environment="AGENTD_FIREFOX_PROFILE_BASE=/home/jasper/.mozilla/firefox"
+Environment="AGENTD_ALWAYS_ON=1"
+Environment="AGENTD_MAX_SESSIONS=3"
+Environment="AGENTD_PUBLIC_HOST=192.168.0.62"
+Environment="AGENTD_COMPOSITOR_CMD=weston"
+Environment="AGENTD_COMPOSITOR_ARGS=--backend=headless --renderer=gl --width={width} --height={height} --xwayland --socket={socket} --idle-time=0"
+Environment="AGENTD_FIREFOX_BINARY=/home/jasper/opt/firefox/firefox"
+Environment="AGENTD_GECKODRIVER_BINARY=/home/jasper/opt/bin/geckodriver"
+Environment="AGENTD_GECKODRIVER_PATH=/home/jasper/opt/bin:/home/jasper/opt/firefox:/usr/bin:/usr/local/bin"
+Environment="AGENTD_SESSION_BLOCKERS=memory_pressure,package_manager_running"
+# Tunables intentionally not pinned via Environment= so they can be overridden
+# with `systemctl --user set-environment ...` during tests. Drain/suspend are
+# absent on purpose — AGENTD_ALWAYS_ON makes them unreachable.
+PassEnvironment=AGENTD_MIN_AVAIL_MB AGENTD_IDLE_THRESHOLD_SECONDS AGENTD_DEBUG
+
+[Install]
+WantedBy=default.target
